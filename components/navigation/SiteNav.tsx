@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/ui/Button";
 import { cn } from "@/lib/utils";
-import { Menu, X, Compass, User, Sparkles, LayoutDashboard, Bookmark, LogOut } from "lucide-react";
+import { Menu, X, Compass, User, Sparkles, LayoutDashboard, Bookmark, LogOut, Settings } from "lucide-react";
 import { NAV_LINKS } from "@/lib/data";
 import { Popover } from "@/components/Popover";
 
@@ -138,6 +138,13 @@ export function SiteNav({ user }: { user: NavUser | null }) {
                         <Bookmark className="h-4 w-4" />
                         Saved destinations
                       </a>
+                      <a
+                        href="/dashboard/settings"
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Settings
+                      </a>
                       <button
                         type="button"
                         onClick={() => {
@@ -212,6 +219,11 @@ export function SiteNav({ user }: { user: NavUser | null }) {
                   <Button variant="outline" size="sm" className="flex-1" asChild>
                     <a href="/dashboard" onClick={() => setMobileOpen(false)}>
                       Dashboard
+                    </a>
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1" asChild>
+                    <a href="/dashboard/settings" onClick={() => setMobileOpen(false)}>
+                      Settings
                     </a>
                   </Button>
                   <Button

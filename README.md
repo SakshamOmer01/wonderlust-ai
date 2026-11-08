@@ -128,7 +128,8 @@ so the browser that made the request stays signed in while every other session
 for that account is rejected. That refresh is signed with an HMAC: the browser
 can post to `/api/auth/session` to update its token, so a bare version number
 would let a revoked token revive itself by guessing the current value.
-`lib/session-version.ts` holds the signing helpers.
+`lib/session-version.ts` holds the signing helpers. The form lives at
+`/dashboard/settings` (linked from the account menu).
 
 ## Security model
 
