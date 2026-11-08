@@ -60,7 +60,7 @@ export async function claimPasswordResetToken(
   const tokenHash = hashResetToken(token);
   const now = new Date();
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     const record = await tx.passwordResetToken.findUnique({
       where: { tokenHash },
       select: { id: true, userId: true, expiresAt: true, usedAt: true },

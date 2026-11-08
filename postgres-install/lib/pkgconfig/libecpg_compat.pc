@@ -1,0 +1,14 @@
+prefix=/workspace/chats/0a08f60b938792e9d9f4fbe2/postgres-install
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libecpg_compat
+Description: PostgreSQL libecpg_compat library
+URL: https://www.postgresql.org/
+Version: 18.0
+Requires: 
+Requires.private: libecpg, libpgtypes
+Cflags: -I${includedir}
+Libs: -L${libdir} -lecpg_compat
+Libs.private: -L/workspace/chats/0a08f60b938792e9d9f4fbe2/install/lib -lecpg -lpgcommon -lpgport -lpq -lm

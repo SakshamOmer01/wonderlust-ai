@@ -28,7 +28,7 @@ export const DELETE = route(
       throw new HttpError("You can only delete your own reviews", 403, "FORBIDDEN");
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.review.delete({ where: { id } });
 
       if (review.destinationId) {
