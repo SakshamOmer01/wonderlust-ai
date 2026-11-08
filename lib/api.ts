@@ -12,7 +12,7 @@
 
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { AuthError, getSessionUser, type SessionUser } from "@/lib/auth.server";
 
@@ -56,11 +56,14 @@ export function route<Args extends unknown[]>(
       }
 
       // Prisma "record not found" (P2025) and unique violations (P2002).
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2025") {
+      if (
+        error instanceof Error &&
+        (error as any).code === "P2025" || (error as any).code === "P2002"
+      ) {
+        if ((error as any).code === "P2025") {
           return errorResponse("Resource not found", 404, "NOT_FOUND");
         }
-        if (error.code === "P2002") {
+        if ((error as any).code === "P2002") {
           return errorResponse("That record already exists", 409, "DUPLICATE");
         }
       }

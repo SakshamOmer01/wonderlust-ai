@@ -14,7 +14,7 @@
 
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { errorResponse, parseJson, route } from "@/lib/api";
@@ -68,8 +68,8 @@ export const POST = route(async (request: Request) => {
   } catch (error) {
     // Handle the race between the uniqueness check above and the insert.
     if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+      error instanceof Error &&
+      ((error as any).code === "P2002" || (error as any).code === "P2025")
     ) {
       return errorResponse(
         "An account with this email already exists",

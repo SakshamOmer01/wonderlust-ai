@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { HttpError, parseJson, parsePagination, requireUser, route } from "@/lib/api";
@@ -97,7 +97,7 @@ export const POST = route(async (request: Request) => {
     }
   }
 
-  const review = await prisma.$transaction(async (tx) => {
+  const review = await prisma.$transaction(async (tx: any) => {
     const created = await tx.review.create({
       data: {
         userId: user.id,
