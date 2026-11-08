@@ -7,8 +7,26 @@ import { TravelCategories } from "@/components/travel-categories/TravelCategorie
 import { WhyChoose } from "@/components/features/WhyChoose";
 import { Testimonials } from "@/components/testimonials/Testimonials";
 import { Footer } from "@/components/layout/Footer";
+import { prisma } from "@/lib/db";
 
-export default function HomePage() {
+/** Ordered by review activity, mirroring "most loved" intent. */
+async function mostLovedDestinations() {
+  return prisma.destination.findMany({
+    orderBy: { reviewCount: "desc" },
+    take: 8,
+    include: {
+      reviews: {
+        select: { rating: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+}
+
+export default async function HomePage() {
+  const destinations = await mostLovedDestinations();
+
   return (
     <>
       <HeroSection />
@@ -40,7 +58,16 @@ export default function HomePage() {
               Based on millions of real traveller reviews.
             </p>
           </div>
-          <DestinationGrid destinations={[]} showAction />
+          {destinations.length > 0 ? (
+            <DestinationGrid destinations={destinations} showAction />
+          ) : (
+            <div className="text-center py-16">
+              <p className="text-lg font-medium text-slate-800">No destinations found</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Try adjusting your search or filters.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
