@@ -75,6 +75,11 @@ export async function sendPasswordResetEmail(params: {
   const safeName = name?.trim() ? escapeHtml(name.trim().split(/\s+/)[0]!) : "there";
   const safeUrl = escapeHtml(resetUrl);
 
+  // The redirect target the reset link points at. Production must override this
+  // with the deployed app's origin so the link lands back in the same
+  // environment that sent the email.
+  const baseUrl = process.env.AUTH_URL ?? "http://localhost:3000";
+
   const subject = "Reset your Wonderlust password";
 
   const text = [
