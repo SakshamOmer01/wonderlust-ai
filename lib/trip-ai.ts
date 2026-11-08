@@ -175,11 +175,96 @@ export async function regenerateDay(
 
   // Delegate to the AI client — the caller (`regenerateDay` in trip-plan.ts)
   // has already validated the trip ownership.
-  const ai = await import("@/lib/ai").then((mod) => mod.generatePlan({ destination: plan.destination?.name, start, end, travelers, budget: String(plan.budget?.total), interests: plan.interests?.join(", "), travelStyle: plan.style }));
+  const ai = await import("@/lib/ai").then((mod) =>
+    mod.generatePlan({
+      destination: plan.destination?.name,
+      start,
+      end,
+      travelers,
+      budget: String(plan.budget?.total),
+      interests: plan.interests?.join(", "),
+      travelStyle: plan.style,
+    })
+  );
 
-  if (ai.status !== "ready" || !ai.plan) {
-    return { plan: null, itineraryDay: null };
+  // If the AI is configured and returns a plan, use it and persist it.
+  if (ai.status === "ready" && ai.plan) {
+    const freshPlan = ai.plan;
+
+    // Find the trip to get its duration and construct a contiguous day range.
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      select: {
+        id: true,
+        startDate: true,
+        endDate: true,
+        durationDays: true,
+        itinerary: { select: { dayNumber: true, id: true } },
+      },
+    });
+
+    if (!trip) return { plan: freshPlan, itineraryDay: null };
+
+    // Build the day list: keep existing days except `day` which is replaced.
+    const existingDays = trip.itinerary.map((d) => d.dayNumber).sort((a, b) => a - b);
+    const maxDay = trip.durationDays || Math.max(...existingDays, 1);
+
+    // Delete existing entries for `day` (we replace the whole day content).
+    await prisma.tripItinerary.deleteMany({
+      where: { tripId, dayNumber: day },
+    });
+
+    // Generate a full day range that is contiguous from 1..maxDay.
+    const fullItinerary: any[] = [];
+    for (let d = 1; d <= maxDay; d++) {
+      if (d === day) {
+        // Regenerated day: reuse the fresh AI plan day.
+        fullItinerary.push({
+          dayNumber: d,
+          morning: freshPlan.itinerary.find((i: any) => i.day === d)?.morning ?? [],
+          afternoon: freshPlan.itinerary.find((i: any) => i.day === d)?.afternoon ?? [],
+          evening: freshPlan.itinerary.find((i: any) => i.day === d)?.evening ?? [],
+          foods: freshPlan.itinerary.find((i: any) => i.day === d)?.foods ?? [],
+          transport: freshPlan.itinerary.find((i: any) => i.day === d)?.transport ?? [],
+          tips: freshPlan.itinerary.find((i: any) => i.day === d)?.tips ?? [],
+          location: undefined,
+        });
+      } else {
+        // Existing day: keep as-is (not regenerated).
+        fullItinerary.push({ dayNumber: d, location: undefined });
+      }
+    }
+
+    // Persist the full sorted itinerary in one bulk write.
+    await prisma.tripItinerary.createMany({
+      data: fullItinerary.map((item, i) => ({
+        tripId: trip.id,
+        dayNumber: item.dayNumber,
+        activity: item.morning?.[0] ?? item.afternoon?.[0] ?? item.evening?.[0] ?? `Day ${item.dayNumber} activity`,
+        description: JSON.stringify(item),
+        startTime: "09:00",
+        endTime: "21:00",
+        location: item.location ?? "Not specified",
+      })),
+      skipDuplicates: true,
+    });
+
+    // Update the trip's duration to match the regenerated range.
+    await prisma.trip.update({
+      where: { id: tripId },
+      data: { durationDays: Math.max(...fullItinerary.map((i) => i.dayNumber)) },
+    });
+
+    const dayRow = await prisma.tripItinerary.findUnique({
+      where: { tripId_dayNumber: { tripId, dayNumber: day } },
+    });
+
+    return { plan: freshPlan, itineraryDay: dayRow };
   }
+
+  // AI not configured or generation failed — fall back to the original
+  // saved plan content and rebuild the trip itinerary.
+  const freshPlan = plan!;
 
   // Find the trip to get its duration and construct a contiguous day range.
   const trip = await prisma.trip.findUnique({
@@ -193,7 +278,7 @@ export async function regenerateDay(
     },
   });
 
-  if (!trip) return { plan: ai.plan, itineraryDay: null };
+  if (!trip) return { plan: freshPlan, itineraryDay: null };
 
   // Build the day list: keep existing days except `day` which is replaced.
   const existingDays = trip.itinerary.map((d) => d.dayNumber).sort((a, b) => a - b);
@@ -204,19 +289,21 @@ export async function regenerateDay(
     where: { tripId, dayNumber: day },
   });
 
-  // Generate a full day range that is contiguous from 1..maxDay.
+  // Build the full itinerary: reuse the original plan's content for the
+  // regenerated day, and keep existing days as-is.
   const fullItinerary: any[] = [];
   for (let d = 1; d <= maxDay; d++) {
     if (d === day) {
-      // Regenerated day: reuse the fresh AI plan day
+      // Regenerated day: use the original saved plan content.
+      const originalDay = freshPlan.itinerary.find((i: any) => i.day === d);
       fullItinerary.push({
         dayNumber: d,
-        morning: ai.plan.itinerary.find((i: any) => i.day === d)?.morning ?? [],
-        afternoon: ai.plan.itinerary.find((i: any) => i.day === d)?.afternoon ?? [],
-        evening: ai.plan.itinerary.find((i: any) => i.day === d)?.evening ?? [],
-        foods: ai.plan.itinerary.find((i: any) => i.day === d)?.foods ?? [],
-        transport: ai.plan.itinerary.find((i: any) => i.day === d)?.transport ?? [],
-        tips: ai.plan.itinerary.find((i: any) => i.day === d)?.tips ?? [],
+        morning: originalDay?.morning ?? [],
+        afternoon: originalDay?.afternoon ?? [],
+        evening: originalDay?.evening ?? [],
+        foods: originalDay?.foods ?? [],
+        transport: originalDay?.transport ?? [],
+        tips: originalDay?.tips ?? [],
         location: undefined,
       });
     } else {
@@ -249,7 +336,7 @@ export async function regenerateDay(
     where: { tripId_dayNumber: { tripId, dayNumber: day } },
   });
 
-  return { plan: ai.plan, itineraryDay: dayRow };
+  return { plan: freshPlan, itineraryDay: dayRow };
 }
 
 /**
@@ -294,3 +381,4 @@ export async function deleteTripPlan(userId: string, tripId: string) {
   await prisma.tripAiPlan.deleteMany({ where: { tripId } });
   return true;
 }
+

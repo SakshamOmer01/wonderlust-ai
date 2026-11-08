@@ -1,40 +1,30 @@
-/** Prisma schema for Wonderlust.
- *
- * Database: PostgreSQL
- * Contains tables for authentication, user profiles, destinations,
- * trips, itineraries, saved destinations, bookings, and reviews.
- *
- * NOTE: Requires DATABASE_URL environment variable pointing to a
- * PostgreSQL database. See README for configuration.
- */
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-}model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String?
-  name          String?
-  avatar        String?
-  role          String    @default("user") // "user" | "admin"
-  /// Incremented whenever credentials change, invalidating existing sessions.
-  sessionVersion Int      @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+}
 
-  // Relationships
-  profile       Profile?   @relation()
-  profileId     String?    @unique
-  sessions      Session[]
-  trips       Trip[]
-  savedDestinations SavedDestination[]
-  bookings      Booking[]
-  reviews       Review[]
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String?
+  name                String?
+  avatar              String?
+  role                String               @default("user")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  profileId           String?              @unique
+  /// Incremented whenever credentials change, invalidating existing sessions.
+  sessionVersion      Int                  @default(0)
+  bookings            Booking[]
   passwordResetTokens PasswordResetToken[]
+  profile             Profile?
+  reviews             Review[]
+  savedDestinations   SavedDestination[]
+  sessions            Session[]
+  trips               Trip[]
 }
 
 /// Single-use, expiring password reset tokens.
@@ -43,10 +33,10 @@ model PasswordResetToken {
   id        String    @id @default(cuid())
   tokenHash String    @unique
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -55,110 +45,108 @@ model PasswordResetToken {
 model Profile {
   id        String   @id @default(cuid())
   userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   bio       String?
   website   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Destination {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  country     String
-  continent   String
-  category    String
-  image       String
-  rating      Float
-  reviewCount Int      @default(0)
-  summary     String
-  bestTimeToVisit String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relationships
-  trips       Trip[]
+  id                String             @id @default(cuid())
+  slug              String             @unique
+  name              String
+  country           String
+  continent         String
+  category          String
+  image             String
+  rating            Float
+  reviewCount       Int                @default(0)
+  summary           String
+  bestTimeToVisit   String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  reviews           Review[]
   savedDestinations SavedDestination[]
-  reviews       Review[]
+  trips             Trip[]
 }
 
 model Trip {
-  id          String   @id @default(cuid())
-  title       String
-  slug        String   @unique
-  destinationId String
-  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  id              String             @id @default(cuid())
+  title           String
+  slug            String             @unique
+  destinationId   String
   destinationName String
-  startDate   DateTime
-  endDate     DateTime
-  travelers   Int
-  budget      String   // "budget" | "standard" | "luxury"
-  durationDays Int
-  image       String
-  price       Float
-  isFavorite  Boolean  @default(false)
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  startDate       DateTime
+  endDate         DateTime
+  travelers       Int
+  budget          String
+  durationDays    Int
+  image           String
+  price           Float
+  isFavorite      Boolean            @default(false)
+  userId          String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  bookings        Booking[]
+  budgetPlan      BudgetPlan?
+  reviews         Review[]
+  destination     Destination        @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  user            User?              @relation(fields: [userId], references: [id])
+  tripAiPlan      TripAiPlan?
+  itinerary       TripItinerary[]
+  savedBy         SavedDestination[] @relation("SavedDestinationToTrip")
 
-  // Phase 3 relationships
-  itinerary   TripItinerary[]
-  savedBy     SavedDestination[]
-  reviews     Review[]
-  bookings    Booking[]
-  tripAiPlan  TripAiPlan? @relation()
-  tripAiPlanId String?
-  budgetPlan  BudgetPlan? @relation()
-  budgetPlanId String?
+  @@index([destinationId])
+  @@index([isFavorite])
+  @@index([startDate])
+  @@index([userId])
 }
 
 model TripItinerary {
-  id        String   @id @default(cuid())
-  tripId    String
-  trip      Trip     @relation(fields: [tripId], references: [id])
-  dayNumber Int
-  activity  String
+  id          String   @id @default(cuid())
+  tripId      String
+  dayNumber   Int
+  activity    String
   description String?
-  startTime String?
-  endTime   String?
-  location  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  startTime   String?
+  endTime     String?
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
-  @@unique([tripId, dayNumber])
+  @@unique([tripId, dayNumber], map: "TripItinerary_tripId_dayNumber_unique")
   @@index([tripId])
 }
 
 model SavedDestination {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  userId        String
   destinationId String
-  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  trips     Trip[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  destination   Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips         Trip[]      @relation("SavedDestinationToTrip")
 
   @@unique([userId, destinationId])
-
   @@index([userId])
   @@index([destinationId])
 }
 
 model Booking {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tripId      String
-  trip        Trip     @relation(fields: [tripId], references: [id])
-  status      String   @default("pending") // "pending" | "confirmed" | "cancelled" | "completed"
+  status      String    @default("pending")
   totalPrice  Float
   travelers   Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   confirmedAt DateTime?
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([tripId])
@@ -166,38 +154,35 @@ model Booking {
 }
 
 model Review {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tripId      String?
-  trip        Trip?    @relation(fields: [tripId], references: [id])
+  id            String       @id @default(cuid())
+  userId        String
+  tripId        String?
   destinationId String?
-  destination Destination? @relation(fields: [destinationId], references: [id], onDelete: Cascade)
-  rating      Int      @default(5) // 1-5
-  comment     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  rating        Int          @default(5)
+  comment       String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  destination   Destination? @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  trip          Trip?        @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, destinationId])
   @@index([userId])
   @@index([destinationId])
   @@index([tripId])
-
-  @@unique([userId, destinationId])
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  sessionToken String @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expires   DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
-
-// Phase 3: AI travel planner storage.
 
 /// Structured, validated JSON of the AI-generated itinerary and budget.
 model TripAiPlan {
@@ -206,46 +191,39 @@ model TripAiPlan {
   contents  Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  trip      Trip     @relation(fields: [tripId], references: [id])
-  @@index([tripId])
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
 model BudgetPlan {
-  id           String   @id @default(cuid())
-  tripId       String   @unique
-  accommodation Float    @default(0)
-  food          Float    @default(0)
-  transportation Float   @default(0)
-  activity      Float    @default(0)
-  other         Float    @default(0)
-  total         Float    @default(0)
-  remaining     Float    @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  trip      Trip     @relation(fields: [tripId], references: [id])
-  @@index([tripId])
+  id             String   @id @default(cuid())
+  tripId         String   @unique
+  accommodation  Float    @default(0)
+  food           Float    @default(0)
+  transportation Float    @default(0)
+  activity       Float    @default(0)
+  other          Float    @default(0)
+  total          Float    @default(0)
+  remaining      Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  trip           Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
 model AiConfig {
-  key         String   @id @default(cuid())
-  provider    String   @default("openai")
-  apiKey      String
-  model       String   @default("gpt-4o-mini")
-  baseUrl     String   @default("https://api.openai.com/v1")
-  timeoutMs   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  key       String   @id @default(cuid())
+  model     String   @default("gpt-4o-mini")
+  baseUrl   String   @default("https://api.openai.com/v1")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Conversation history for the AI travel assistant (server-side store).
 model AiChatMessage {
-  id            String   @id @default(cuid())
+  id             String   @id @default(cuid())
   conversationId String
-  role          String
-  content       String
-  createdAt     DateTime @default(now())
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
 
   @@index([conversationId])
 }

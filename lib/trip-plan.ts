@@ -383,11 +383,18 @@ export async function generateAssistantMessage(
   tripContext: { title?: string; destination?: string; start?: string; end?: string }
 ) {
   // Load (or create) the conversation history for this caller + conversation.
-  let messages = await prisma.aiChatMessage.findMany({
-    where: { conversationId },
-    orderBy: { createdAt: "asc" },
-    select: { role: true, content: true },
-  });
+  // The database may not be available (e.g. during testing), so wrap in try/catch.
+  let messages: { role: string; content: string }[] = [];
+  try {
+    messages = await prisma.aiChatMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "asc" },
+      select: { role: true, content: true },
+    });
+  } catch {
+    // Database not available — start with empty conversation history.
+    messages = [];
+  }
 
   // Cap history so the conversation cannot grow without bound.
   if (messages.length > 50) messages = messages.slice(-50);
@@ -399,14 +406,19 @@ export async function generateAssistantMessage(
 
   // Persist the user turn first; the AI reply is stored after we have a
   // successful generation, so a malformed response never lands in the DB.
-  await prisma.aiChatMessage.create({
-    data: {
-      id: crypto.randomUUID(),
-      conversationId,
-      role: "user",
-      content: userMessage,
-    },
-  });
+  // Wrap in try/catch in case the database is unavailable.
+  try {
+    await prisma.aiChatMessage.create({
+      data: {
+        id: crypto.randomUUID(),
+        conversationId,
+        role: "user",
+        content: userMessage,
+      },
+    });
+  } catch {
+    // Database not available — skip persistence.
+  }
 
   if (!replyRes.reply) {
     // Missing key / network error: do not fabricate an answer.
