@@ -29,7 +29,7 @@ const destinations = [
     country: "Indonesia",
     continent: "Asia",
     category: "beach",
-    image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4",
+    image: "https://images.unsplash.com/photo-1506929562872-bb421503ef21",
     rating: 4.8,
     summary: "Rice terraces, temples and surf breaks on a volcanic island.",
     bestTimeToVisit: "April to October",

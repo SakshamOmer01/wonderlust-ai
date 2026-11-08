@@ -11,8 +11,8 @@ interface HeroSectionProps {
 
 const DESTINATION_IMAGES = [
   "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=1920&q=80",
-  "https://images.unsplash.com/photo-1526170315356-654e5e8b8a52?w=1920&q=80",
-  "https://images.unsplash.com/photo-1564013799919-ab6000248d4d?w=1920&q=80",
+  "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=1920&q=80",
+  "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1920&q=80",
 ];
 
 export function HeroSection({ className }: HeroSectionProps) {
