@@ -1,0 +1,136 @@
+# Wonderlust - GitHub Actions CI.
+#
+# Frontend, backend, database and integration jobs. Database is provided by
+# the official `postgres:18` GitHub Actions service container (Docker), so no
+# local apt/dpkg/PostgreSQL installation is required.
+#
+# Required environment variables (set in GitHub repository Secrets,
+# e.g. DATABASE_URL and AUTH_SECRET). The .env file is gitignored and is never
+# committed, so no secrets are shipped.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ---------------------------------------------------------------- FRONTEND
+  # TypeScript: tsc --noEmit
+  # lint: eslint .
+  # build: next build (prerender must succeed; the homepage data is served from
+  #         the database, see lib/db.ts and app/page.tsx)
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run types
+      - run: npm run lint
+      - run: npm run build
+
+  # ---------------------------------------------------------------- BACKEND
+  # Runs the full API suite against the database provided by the PostgreSQL
+  # service container.
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: wonderlust
+          POSTGRES_DB: wonderlust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+          --health-start-period 20s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: wait for database
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            sleep 1
+          done
+      - name: database connection check
+        run: |
+          PGPASSWORD=wonderlust psql -h localhost -U postgres -d wonderlust -c "SELECT version();" >/dev/null
+      - name: db:generate
+        run: npx prisma generate
+      - name: db:migrate
+        run: npx prisma migrate deploy
+      - name: db:seed
+        run: npx prisma db seed
+
+  # --------------------------------------------------------------- INTEGRATION
+  # Full API smoke test: authentication (register/login/CSRF/session/logout),
+  # CRUD, ownership rules, rate limiting and password reset. This is the same
+  # script used by scripts/api-smoke.sh.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: wonderlust
+          POSTGRES_DB: wonderlust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+          --health-start-period 20s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: wait for database
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            sleep 1
+          done
+      - name: db:migrate + db:seed
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          npx prisma db seed
+      - name: start dev server (has DATABASE_URL)
+        run: |
+          DATABASE_URL=postgresql://postgres:wonderlust@localhost:5432/wonderlust \
+          AUTH_SECRET=ci-test-secret \
+          AUTH_URL=http://localhost:3000 \
+          AUTH_TRUST_HOST=true \
+          npm run dev > /tmp/next-dev.log 2>&1 &
+          echo $! > /tmp/next-dev.pid
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3001/api/auth/csrf >/dev/null && break
+            sleep 1
+          done
+      - name: run API smoke tests
+        run: ./scripts/api-smoke.sh
+        env:
+          BASE: http://localhost:3001
+      - name: stop dev server
+        if: always()
+        run: |
+          if [ -f /tmp/next-dev.pid ]; then
+            kill "$(cat /tmp/next-dev.pid)" 2>/dev/null || true
+            wait "$(cat /tmp/next-dev.pid)" 2>/dev/null || true
+          fi

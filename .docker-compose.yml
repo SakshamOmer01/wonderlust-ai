@@ -1,0 +1,29 @@
+# Wonderlust - Local PostgreSQL 18 (Docker Compose).
+#
+# Official PostgreSQL 18 image. No apt/dpkg/system installation is used.
+# Run: docker compose up -d
+# Use DATABASE_URL=postgresql://postgres:wonderlust@127.0.0.1:5432/wonderlust
+version: "3.9"
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: wonderlust
+      POSTGRES_DB: wonderlust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wonderlust"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+volumes:
+  postgres_data:
+EOF
+echo "docker-compose.yml written"; docker compose -f docker-compose.yml config >/dev/null 2>&1; echo "docker compose config exit: $?"
