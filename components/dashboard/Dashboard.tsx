@@ -3,11 +3,16 @@
 import { ProfileCard } from "@/components/users/ProfileCard";
 import { MyTrips } from "@/components/trips/MyTrips";
 import { SavedDestinations } from "./SavedDestinations";
+import { User } from "@/types";
 import { PageHeader } from "./../layout/PageHeader";
 import { Button } from "@/ui/Button";
 import { Plus, Star, MapPin, Compass, ArrowRight } from "lucide-react";
 
-export function Dashboard() {
+interface DashboardProps {
+  user: User;
+}
+
+export function Dashboard({ user }: DashboardProps) {
   return (
     <div className="bg-white">
       {/* Hero */}
@@ -35,7 +40,7 @@ export function Dashboard() {
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            <ProfileCard />
+            <ProfileCard user={user} />
             <div className="flex gap-3">
               <div className="flex-1 rounded-xl bg-slate-50 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">

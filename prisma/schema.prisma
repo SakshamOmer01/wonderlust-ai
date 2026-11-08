@@ -1,0 +1,180 @@
+/** Prisma schema for Wonderlust.
+ *
+ * Database: PostgreSQL
+ * Contains tables for authentication, user profiles, destinations,
+ * trips, itineraries, saved destinations, bookings, and reviews.
+ *
+ * NOTE: Requires DATABASE_URL environment variable pointing to a
+ * PostgreSQL database. See README for configuration.
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  avatar        String?
+  role          String    @default("user") // "user" | "admin"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relationships
+  profile       Profile?   @relation()
+  profileId     String?    @unique
+  sessions      Session[]
+  trips       Trip[]
+  savedDestinations SavedDestination[]
+  bookings      Booking[]
+  reviews       Review[]
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio       String?
+  website   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Destination {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  country     String
+  continent   String
+  category    String
+  image       String
+  rating      Float
+  reviewCount Int      @default(0)
+  summary     String
+  bestTimeToVisit String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  trips       Trip[]
+  savedDestinations SavedDestination[]
+  reviews       Review[]
+}
+
+model Trip {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  destinationId String
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  destinationName String
+  startDate   DateTime
+  endDate     DateTime
+  travelers   Int
+  budget      String   // "budget" | "standard" | "luxury"
+  durationDays Int
+  image       String
+  price       Float
+  isFavorite  Boolean  @default(false)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  itinerary   TripItinerary[]
+  savedBy     SavedDestination[]
+  reviews     Review[]
+  bookings    Booking[]
+
+  @@index([destinationId])
+  @@index([userId])
+  @@index([startDate])
+  @@index([isFavorite])
+}
+
+model TripItinerary {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  dayNumber Int
+  activity  String
+  description String?
+  startTime String?
+  endTime   String?
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+}
+
+model SavedDestination {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinationId String
+  destination Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  trips     Trip[]
+
+  @@unique([userId, destinationId])
+
+  @@index([userId])
+  @@index([destinationId])
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  status      String   @default("pending") // "pending" | "confirmed" | "cancelled" | "completed"
+  totalPrice  Float
+  travelers   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  confirmedAt DateTime?
+
+  @@index([userId])
+  @@index([tripId])
+  @@index([status])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tripId      String?
+  trip        Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  destinationId String?
+  destination Destination? @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  rating      Int      @default(5) // 1-5
+  comment     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([destinationId])
+  @@index([tripId])
+
+  @@unique([userId, destinationId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sessionToken String @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/ui/Button";
 import { Input } from "@/ui/Input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/Card";
+import { Card, CardContent } from "@/ui/Card";
 import { Alert, AlertTitle, AlertDescription } from "@/ui/Alert";
 import {
   Mail,
@@ -15,6 +15,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Mode = "login" | "register" | "forgot";
 
@@ -29,8 +31,10 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};
@@ -51,16 +55,67 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
-    setIsSubmitting(true);
-    // NOTE: Backend auth endpoint replaces this simulated submission.
-    setTimeout(() => {
-      setIsSubmitting(false);
-      // In a production app, redirect to /dashboard after successful auth.
-    }, 1200);
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      if (mode === "login") {
+        const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+        const result = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+          callbackUrl,
+        });
+
+        if (result?.error) {
+          setErrors({ submit: "Invalid email or password" });
+        } else if (result?.ok) {
+          router.push(callbackUrl);
+          router.refresh();
+        }
+      } else if (mode === "register") {
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password,
+            confirmPassword,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setErrors({ submit: data.error || "Registration failed" });
+        } else {
+          router.push("/login?registered=true");
+        }
+      } else if (mode === "forgot") {
+        const response = await fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setErrors({ submit: data.error || "Failed to send reset link" });
+        } else {
+          router.push(`/login?reset=success`);
+        }
+      }
+    } catch {
+      setErrors((prev) => ({ ...prev, submit: "An unexpected error occurred" }));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const inputClass = (field: string) =>
@@ -75,7 +130,7 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
       <Button
         variant="ghost"
         className="absolute left-4 top-4"
-        onClick={onSwitchMode}
+        onClick={onSwitchMode ?? (() => router.push("/"))}
       >
         <ArrowLeft className="h-4 w-4" />
       </Button>
@@ -115,30 +170,32 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
           )}
 
           <CardContent className="space-y-4">
-            {mode !== "login" && (
-              <>
-                <div className="space-y-2">
-                  <label htmlFor="auth-email" className="text-sm font-medium text-slate-700">
-                    Email address
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                      id="auth-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={cn(inputClass("email"), "pl-10")}
-                      error={errors.email}
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="text-xs text-red-500 mt-1">{errors.email}</p>
-                  )}
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <div className="space-y-2">
+                <label htmlFor="auth-email" className="text-sm font-medium text-slate-700">
+                  Email address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    id="auth-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={cn(inputClass("email"), "pl-10")}
+                    error={errors.email}
+                  />
                 </div>
+                {errors.email && (
+                  <p className="text-xs text-red-500 mt-1">{errors.email}</p>
+                )}
+              </div>
 
-                {mode === "register" && (
+              {mode !== "forgot" && (
+                <>
                   <div className="space-y-2">
                     <label htmlFor="auth-password" className="text-sm font-medium text-slate-700">
                       Password
@@ -147,7 +204,9 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                       <Input
                         id="auth-password"
+                        name="password"
                         type={showPassword ? "text" : "password"}
+                        autoComplete={mode === "login" ? "current-password" : "new-password"}
                         placeholder="At least 8 characters"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -167,7 +226,6 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
                       <p className="text-xs text-red-500 mt-1">{errors.password}</p>
                     )}
                   </div>
-                )}
 
                 {mode === "register" && (
                   <div className="space-y-2">
@@ -204,10 +262,18 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
               </Alert>
             )}
 
+            {errors.submit && (
+              <Alert variant="error">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Something went wrong</AlertTitle>
+                <AlertDescription>{errors.submit}</AlertDescription>
+              </Alert>
+            )}
+
             <Button
               type="submit"
               className="w-full"
-              isLoading={isSubmitting}
+              isLoading={isLoading}
             >
               {mode === "login" && "Sign in"}
               {mode === "register" && "Create account"}
@@ -218,27 +284,36 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
               <div className="flex items-center gap-2 pt-2 text-sm">
                 <span className="text-slate-500">Don&apos;t have an account?</span>
                 <Button
+                  type="button"
                   variant="ghost"
                   className="font-semibold text-wonderlust-primary"
-                  onClick={onSwitchMode}
+                  onClick={onSwitchMode ?? (() => router.push("/register"))}
                 >
                   Sign up
                 </Button>
+                <a
+                  href="/forgot"
+                  className="ml-auto text-sm font-medium text-slate-500 hover:text-wonderlust-primary"
+                >
+                  Forgot password?
+                </a>
               </div>
             )}
 
-            {mode === "register" && (
-              <div className="flex items-center gap-2 pt-2 text-sm">
-                <span className="text-slate-500">Already have an account?</span>
-                <Button
-                  variant="ghost"
-                  className="font-semibold text-wonderlust-primary"
-                  onClick={onSwitchMode}
-                >
-                  Sign in
-                </Button>
-              </div>
-            )}
+              {mode === "register" && (
+                <div className="flex items-center gap-2 pt-2 text-sm">
+                  <span className="text-slate-500">Already have an account?</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="font-semibold text-wonderlust-primary"
+                    onClick={onSwitchMode ?? (() => router.push("/login"))}
+                  >
+                    Sign in
+                  </Button>
+                </div>
+              )}
+            </form>
           </CardContent>
         </Card>
       </div>

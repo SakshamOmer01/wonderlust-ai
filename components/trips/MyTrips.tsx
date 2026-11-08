@@ -1,86 +1,94 @@
-import { TripCard } from "./TripCard";
-import { EmptyState } from "@/ui/EmptyState";
-import { Button } from "@/ui/Button";
-import { Map, Plus } from "lucide-react";
-import type { Trip } from "@/types";
+/**
+ * My Trips component for Wonderlust.
+ *
+ * Fetches the authenticated user's trips from the backend API.
+ *
+ * Requires authentication.
+ */
 
-const MOCK_TRIPS: Trip[] = [
-  {
-    id: "t1",
-    title: "Bali Highlands Retreat",
-    slug: "bali-highlands-retreat",
-    destination: {
-      id: "dalat-vietnam",
-      name: "Da Lat",
-      slug: "dalat-vietnam",
-      country: "Vietnam",
-      continent: "asia",
-      category: "mountain",
-      image: "https://images.unsplash.com/photo-1503349511420-432254252ad6?w=1600&q=80",
-      rating: 4.8,
-      reviewCount: 1240,
-      summary: "A misty highland paradise known as the City of Eternal Spring.",
-      bestTimeToVisit: "February - August",
-    },
-    destinationId: "dalat-vietnam",
-    startDate: "2027-03-12",
-    endDate: "2027-03-26",
-    travelers: 2,
-    budget: "luxury",
-    durationDays: 14,
-    image: "https://images.unsplash.com/photo-1503349511420-432254252ad6?w=1600&q=80",
-    price: 4850,
-    featured: true,
-    createdAt: "2025-03-01",
-  },
-  {
-    id: "t2",
-    title: "Mauritius Island Hopping",
-    slug: "mauritius-island-hopping",
-    destination: {
-      id: "mauritius",
-      name: "Mauritius",
-      slug: "mauritius",
-      country: "Mauritius",
-      continent: "africa",
-      category: "beach",
-      image: "https://images.unsplash.com/photo-1537996194471-188b87376b25?w=1600&q=80",
-      rating: 4.9,
-      reviewCount: 2103,
-      summary: "A tropical gem where turquoise lagoons and coral reefs meet French colonial charm.",
-      bestTimeToVisit: "October - April",
-    },
-    destinationId: "mauritius",
-    startDate: "2026-12-02",
-    endDate: "2026-12-16",
-    travelers: 3,
-    budget: "standard",
-    durationDays: 14,
-    image: "https://images.unsplash.com/photo-1537996194471-188b87376b25?w=1600&q=80",
-    price: 2980,
-    createdAt: "2025-01-15",
-  },
-];
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { TripCard } from "./TripCard";
+import { Alert, AlertTitle, AlertDescription } from "@/ui/Alert";
+import { AlertCircle } from "lucide-react";
+import { Trip } from "@/types";
 
 export function MyTrips() {
-  if (MOCK_TRIPS.length === 0) {
-    return (
-      <EmptyState
-        icon={<Map className="h-12 w-12 text-slate-300" />}
-        title="No trips yet"
-        description="You haven't planned any trips with Wonderlust. Create your first trip to get started."
-        action={
-          <Button leftIcon={<Plus />}>Create your first trip</Button>
-        }
-      />
-    );
-  }
+  const { data: session } = useSession();
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchTrips = useCallback(async () => {
+    if (!session?.user?.id) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // The session cookie identifies the user; no user ID is sent from the
+      // client. `mine=1` scopes the query to the authenticated account.
+      const response = await fetch("/api/trips?mine=1");
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch trips");
+      }
+
+      const data = await response.json();
+      setTrips(data.trips || []);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch trips");
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchTrips();
+  }, [fetchTrips]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {MOCK_TRIPS.map((trip) => (
-        <TripCard key={trip.id} trip={trip} />
-      ))}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900">My Trips</h2>
+        <a
+          href="/trips"
+          className="text-sm font-semibold text-wonderlust-primary hover:underline"
+        >
+          View all
+        </a>
+      </div>
+
+      {loading && <p className="text-sm text-slate-500">Loading trips...</p>}
+
+      {error && (
+        <Alert variant="error">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {!loading && !error && (
+        <div className="space-y-4">
+          {trips.length > 0 ? (
+            trips.map((trip) => <TripCard key={trip.id} trip={trip} />)
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No trips yet</AlertTitle>
+              <AlertDescription>
+                You haven&apos;t created any trips yet. Start planning your next
+                adventure!
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
     </div>
   );
 }

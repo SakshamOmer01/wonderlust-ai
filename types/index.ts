@@ -97,3 +97,13 @@ export interface FAQItem {
   question: string;
   answer: string;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  avatar: string | null;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
