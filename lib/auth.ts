@@ -60,6 +60,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           image: user.avatar,
           role: user.role,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -69,6 +70,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role ?? "user";
+        // Snapshot the credential version issued with this session. It is
+        // compared against the database on every authenticated request, so
+        // bumping User.sessionVersion revokes existing sessions.
+        token.sv = user.sessionVersion ?? 0;
       }
       return token;
     },
@@ -76,6 +81,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as string) ?? "user";
+        session.sessionVersion = (token.sv as number | undefined) ?? 0;
       }
       return session;
     },

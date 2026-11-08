@@ -273,6 +273,9 @@ req GET /api/users 401 "session cleared after sign out" "" "$JAR_A"
 echo
 echo "-- Password reset completion --"
 NEW_PASSWORD="Wonderlust456!"
+# Sign in again so the password change below has a live session to revoke.
+check "re-establish a session before the reset" "ok" "$(login "$JAR_A" "$USER_A" "$PASSWORD")"
+req GET /api/users 200 "session before the reset is valid" "" "$JAR_A"
 req POST /api/auth/reset-password 400 "unknown reset token → 400" \
   '{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","password":"Wonderlust456!","confirmPassword":"Wonderlust456!"}'
 
@@ -288,6 +291,8 @@ req POST /api/auth/reset-password 200 "reset password with a valid token" \
   "{\"token\":\"$RESET_TOKEN\",\"password\":\"$NEW_PASSWORD\",\"confirmPassword\":\"$NEW_PASSWORD\"}"
 req POST /api/auth/reset-password 400 "token is single-use → 400 on replay" \
   "{\"token\":\"$RESET_TOKEN\",\"password\":\"$NEW_PASSWORD\",\"confirmPassword\":\"$NEW_PASSWORD\"}"
+req GET /api/users 401 "session issued before the reset is revoked" "" "$JAR_A"
+req GET /api/users 200 "other users are unaffected by the reset" "" "$JAR_B"
 check "login with the old password now fails" "fail" "$(login "$JAR_A" "$USER_A" "$PASSWORD")"
 check "login with the new password works" "ok" "$(login "$JAR_A" "$USER_A" "$NEW_PASSWORD")"
 req GET /api/users 200 "new password session can read the profile" "" "$JAR_A"

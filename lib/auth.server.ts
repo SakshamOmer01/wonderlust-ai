@@ -5,11 +5,17 @@
  * single source of truth for "who is making this request" in server components
  * and API route handlers.
  *
- * The session is a signed, HttpOnly JWT cookie issued by Auth.js. It is never
- * derived from request headers, query parameters, or client-supplied IDs.
+ * Sessions are signed, HttpOnly JWT cookies issued by Auth.js. Because a JWT
+ * cannot be revoked on its own, each token carries the credential version
+ * (`User.sessionVersion`) it was issued with. Every authenticated request
+ * compares that snapshot with the database, so bumping the version (which
+ * `setUserPassword` does) invalidates every existing session immediately.
  */
 
+import type { Session } from "next-auth";
+
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export type SessionUser = {
   id: string;
@@ -32,24 +38,49 @@ export class AuthError extends Error {
 }
 
 /**
+ * Load the user behind a session and reject stale credential versions.
+ * Returns null for deleted accounts and revoked sessions.
+ */
+async function validateSession(session: Session | null): Promise<SessionUser | null> {
+  if (!session?.user?.id) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatar: true,
+      role: true,
+      sessionVersion: true,
+    },
+  });
+
+  if (!user) return null;
+
+  // A password change bumps sessionVersion, so any token minted earlier is
+  // treated as signed out.
+  if (user.sessionVersion !== (session.sessionVersion ?? 0)) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatar: user.avatar,
+    role: user.role,
+  };
+}
+
+/**
  * Get the authenticated user for the current request, or null.
  *
  * Safe to call from server components, route handlers and server actions.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await auth();
-
-  if (!session?.user?.id) {
-    return null;
-  }
-
-  return {
-    id: session.user.id,
-    email: session.user.email ?? "",
-    name: session.user.name ?? null,
-    avatar: session.user.image ?? null,
-    role: session.user.role ?? "user",
-  };
+  return validateSession(session);
 }
 
 /** Backwards-compatible session shape used by server components. */
@@ -60,18 +91,11 @@ export type UserSession = {
 
 export async function getSession(): Promise<UserSession | null> {
   const session = await auth();
-  if (!session?.user?.id) return null;
+  const user = await validateSession(session);
 
-  return {
-    user: {
-      id: session.user.id,
-      email: session.user.email ?? "",
-      name: session.user.name ?? null,
-      avatar: session.user.image ?? null,
-      role: session.user.role ?? "user",
-    },
-    expires: session.expires,
-  };
+  if (!user) return null;
+
+  return { user, expires: session!.expires };
 }
 
 /** Throw a 401 unless the request is authenticated. */

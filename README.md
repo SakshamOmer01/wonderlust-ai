@@ -102,16 +102,24 @@ All routes validate input with zod and return `{ error, code }` on failure.
    SHA-256 hash** with a 30-minute expiry, and emails
    `/reset-password?token=…`.
 2. `POST /api/auth/reset-password` claims the token atomically (single use),
-   re-hashes the new password with bcrypt and invalidates any other outstanding
-   tokens for that account.
+   re-hashes the new password with bcrypt, invalidates any other outstanding
+   tokens for that account, and revokes every existing session (below).
 
 Delivery uses SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
 `EMAIL_FROM`), so any provider works. In development without SMTP configured,
 the link is logged to the server console and returned as `devResetUrl`;
 production never returns it and never pretends an email was sent.
 
-Note: existing JWT sessions are not revoked when a password is reset — they
-remain valid until they expire. Session revocation is planned for a later phase.
+### Session revocation
+
+Sessions are stateless JWTs, so revocation uses a credential version:
+`User.sessionVersion` is copied into the token as `sv` at sign-in, and
+`getSessionUser()` compares it with the database on every authenticated
+request. `setUserPassword()` (`lib/passwords.ts`) stores the new hash and
+increments the version in one write, so resetting a password immediately signs
+that account out everywhere — including other browsers and devices — while
+other accounts keep their sessions. `revokeUserSessions(userId)` does the same
+without changing the password (useful for a future "sign out all devices").
 
 ## Security model
 
@@ -130,6 +138,9 @@ remain valid until they expire. Session revocation is planned for a later phase.
 - **Reset tokens** are random 256-bit values stored only as SHA-256 hashes,
   expire after 30 minutes, are single-use, and are superseded when a new one is
   requested.
+- **Revocable sessions.** Tokens carry the user's credential version, checked
+  against the database per request; a password change bumps it and invalidates
+  every previously issued session.
 - **Secrets** live only in `.env` (gitignored); no service-role keys or
   database credentials are exposed to the browser.
 
@@ -137,7 +148,6 @@ remain valid until they expire. Session revocation is planned for a later phase.
 
 - SMTP credentials must be supplied to deliver reset emails; without them
   development logs the link and production logs a delivery failure.
-- Password reset does not revoke existing JWT sessions.
 - Rate-limit counters are per-process (no Redis yet).
 - No email verification, 2FA or OAuth providers.
 - Payment capture for bookings is not implemented; bookings stay `pending`.

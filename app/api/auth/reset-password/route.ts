@@ -17,13 +17,12 @@
  */
 
 import { NextResponse } from "next/server";
-import bcrypt from "bcrypt";
 
-import { prisma } from "@/lib/db";
 import { HttpError, parseJson, route } from "@/lib/api";
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit";
 import { resetPasswordSchema } from "@/lib/validation";
 import { claimPasswordResetToken } from "@/lib/password-reset";
+import { setUserPassword } from "@/lib/passwords";
 
 const INVALID_TOKEN_MESSAGE =
   "This reset link is invalid or has expired. Please request a new one.";
@@ -39,12 +38,9 @@ export const POST = route(async (request: Request) => {
     throw new HttpError(INVALID_TOKEN_MESSAGE, 400, "INVALID_RESET_TOKEN");
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  await prisma.user.update({
-    where: { id: claim.userId },
-    data: { passwordHash },
-  });
+  // Stores the new bcrypt hash and bumps the credential version, which
+  // immediately revokes every session issued before this reset.
+  await setUserPassword(claim.userId, password);
 
   return NextResponse.json({
     message: "Password updated. You can now sign in with your new password.",
