@@ -202,6 +202,14 @@ export function ChangePasswordForm() {
                   className={cn(inputClass, fieldErrors.newPassword && "border-red-400")}
                   aria-describedby={fieldErrors.newPassword ? "new-password-error" : undefined}
                 />
+                <button
+                  type="button"
+                  onClick={() => setReveal((value) => !value)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={reveal ? "Hide passwords" : "Show passwords"}
+                >
+                  {reveal ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {fieldErrors.newPassword && (
                 <p id="new-password-error" className="text-xs text-red-500">
@@ -234,6 +242,14 @@ export function ChangePasswordForm() {
                     fieldErrors.confirmPassword ? "confirm-password-error" : undefined
                   }
                 />
+                <button
+                  type="button"
+                  onClick={() => setReveal((value) => !value)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={reveal ? "Hide passwords" : "Show passwords"}
+                >
+                  {reveal ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {fieldErrors.confirmPassword && (
                 <p id="confirm-password-error" className="text-xs text-red-500">

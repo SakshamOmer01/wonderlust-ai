@@ -1,6 +1,43 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/*
+ * Design tokens (Tailwind v4 CSS-first theme).
+ *
+ * These generate the utilities the components use: `bg-wonderlust-primary`,
+ * `text-wonderlust-teal`, `border-border`, `bg-primary/10`, `bg-muted`, …
+ */
+@theme {
+  --color-wonderlust-primary: #1a73e8;
+  --color-wonderlust-teal: #0d9488;
+  --color-wonderlust-dark: #0f172a;
+  --color-wonderlust-surface: #f8fafc;
+  --color-wonderlust-muted: #e2e8f0;
+  --color-wonderlust-border: #e2e8f0;
+
+  /* Semantic aliases used by the shared UI primitives. */
+  --color-primary: #1a73e8;
+  --color-border: #e2e8f0;
+  --color-surface: #f8fafc;
+  --color-muted: #e2e8f0;
+
+  --font-heading: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+/*
+ * Tailwind v4 defaults the border colour to `currentColor`; v3 (which this
+ * markup was written against) defaulted to gray-200. Restore that so a bare
+ * `border` class keeps the intended light hairline.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
 
 :root {
   --background: #ffffff;
