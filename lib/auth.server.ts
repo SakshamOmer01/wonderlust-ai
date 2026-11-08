@@ -99,6 +99,10 @@ export async function getSession(): Promise<UserSession | null> {
 }
 
 /** Throw a 401 unless the request is authenticated. */
+export async function requireUser(): Promise<SessionUser> {
+  return requireAuth();
+}
+
 export async function requireAuth(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) {

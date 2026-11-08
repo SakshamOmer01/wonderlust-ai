@@ -60,9 +60,8 @@ export const POST = route(async (request: Request) => {
   try {
     const result = await sendPasswordResetEmail({
       to: user.email,
-      name: user.name,
+      name: user.name ?? "there",
       resetUrl,
-      expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
     });
     delivered = result.delivered;
   } catch (error) {

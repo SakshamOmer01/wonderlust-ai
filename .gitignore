@@ -41,3 +41,10 @@ tsconfig.tsbuildinfo
 *.env.test.local
 *.env.production.local
 node_modules/
+
+# PostgreSQL data directory
+pgdata/
+postgres-install/
+postgres-bin/
+postgresql.conf
+postmaster.opts

@@ -103,22 +103,21 @@ model Trip {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relationships
+  // Phase 3 relationships
   itinerary   TripItinerary[]
   savedBy     SavedDestination[]
   reviews     Review[]
   bookings    Booking[]
-
-  @@index([destinationId])
-  @@index([userId])
-  @@index([startDate])
-  @@index([isFavorite])
+  tripAiPlan  TripAiPlan? @relation()
+  tripAiPlanId String?
+  budgetPlan  BudgetPlan? @relation()
+  budgetPlanId String?
 }
 
 model TripItinerary {
   id        String   @id @default(cuid())
   tripId    String
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip      Trip     @relation(fields: [tripId], references: [id])
   dayNumber Int
   activity  String
   description String?
@@ -128,6 +127,7 @@ model TripItinerary {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([tripId, dayNumber])
   @@index([tripId])
 }
 
@@ -152,7 +152,7 @@ model Booking {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tripId      String
-  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip        Trip     @relation(fields: [tripId], references: [id])
   status      String   @default("pending") // "pending" | "confirmed" | "cancelled" | "completed"
   totalPrice  Float
   travelers   Int
@@ -170,7 +170,7 @@ model Review {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tripId      String?
-  trip        Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip        Trip?    @relation(fields: [tripId], references: [id])
   destinationId String?
   destination Destination? @relation(fields: [destinationId], references: [id], onDelete: Cascade)
   rating      Int      @default(5) // 1-5
@@ -195,4 +195,57 @@ model Session {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Phase 3: AI travel planner storage.
+
+/// Structured, validated JSON of the AI-generated itinerary and budget.
+model TripAiPlan {
+  id        String   @id @default(cuid())
+  tripId    String   @unique
+  contents  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trip      Trip     @relation(fields: [tripId], references: [id])
+  @@index([tripId])
+}
+
+model BudgetPlan {
+  id           String   @id @default(cuid())
+  tripId       String   @unique
+  accommodation Float    @default(0)
+  food          Float    @default(0)
+  transportation Float   @default(0)
+  activity      Float    @default(0)
+  other         Float    @default(0)
+  total         Float    @default(0)
+  remaining     Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trip      Trip     @relation(fields: [tripId], references: [id])
+  @@index([tripId])
+}
+
+model AiConfig {
+  key         String   @id @default(cuid())
+  provider    String   @default("openai")
+  apiKey      String
+  model       String   @default("gpt-4o-mini")
+  baseUrl     String   @default("https://api.openai.com/v1")
+  timeoutMs   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Conversation history for the AI travel assistant (server-side store).
+model AiChatMessage {
+  id            String   @id @default(cuid())
+  conversationId String
+  role          String
+  content       String
+  createdAt     DateTime @default(now())
+
+  @@index([conversationId])
 }
