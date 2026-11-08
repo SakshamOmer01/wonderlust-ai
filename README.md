@@ -93,7 +93,25 @@ All routes validate input with zod and return `{ error, code }` on failure.
 | POST | `/api/reviews` | session | one review per destination per user |
 | DELETE | `/api/reviews/:id` | session | author or admin |
 | POST | `/api/auth/register` | public | rate limited |
-| POST | `/api/auth/forgot-password` | public | rate limited, generic response |
+| POST | `/api/auth/forgot-password` | public | rate limited, generic response, emails reset link |
+| POST | `/api/auth/reset-password` | public | consumes single-use token, sets new password |
+
+## Password reset
+
+1. `POST /api/auth/forgot-password` creates a 256-bit token, stores **only its
+   SHA-256 hash** with a 30-minute expiry, and emails
+   `/reset-password?token=…`.
+2. `POST /api/auth/reset-password` claims the token atomically (single use),
+   re-hashes the new password with bcrypt and invalidates any other outstanding
+   tokens for that account.
+
+Delivery uses SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
+`EMAIL_FROM`), so any provider works. In development without SMTP configured,
+the link is logged to the server console and returned as `devResetUrl`;
+production never returns it and never pretends an email was sent.
+
+Note: existing JWT sessions are not revoked when a password is reset — they
+remain valid until they expire. Session revocation is planned for a later phase.
 
 ## Security model
 
@@ -105,16 +123,21 @@ All routes validate input with zod and return `{ error, code }` on failure.
   aggregates — clients cannot set prices or confirm their own bookings.
 - **Validation** with zod on every write endpoint (types, ranges, dates,
   enums); Prisma parameterises all SQL.
-- **Rate limiting** on registration (10 per 15 min per IP) and password-reset
-  requests (3 per 15 min per IP); counters are in-process, so back them with a
-  shared store for multi-instance deployments.
+- **Rate limiting** on registration (10 per 15 min per IP), password-reset
+  requests (3 per 15 min per IP and 3 per hour per address) and reset
+  completion (5 per 15 min per IP); counters are in-process, so back them with
+  a shared store for multi-instance deployments.
+- **Reset tokens** are random 256-bit values stored only as SHA-256 hashes,
+  expire after 30 minutes, are single-use, and are superseded when a new one is
+  requested.
 - **Secrets** live only in `.env` (gitignored); no service-role keys or
   database credentials are exposed to the browser.
 
 ## Known gaps (Phase 3+)
 
-- Transactional email is not configured, so password-reset requests do not
-  send a link yet (endpoint behaviour is deliberately generic).
+- SMTP credentials must be supplied to deliver reset emails; without them
+  development logs the link and production logs a delivery failure.
+- Password reset does not revoke existing JWT sessions.
 - Rate-limit counters are per-process (no Redis yet).
 - No email verification, 2FA or OAuth providers.
 - Payment capture for bookings is not implemented; bookings stay `pending`.

@@ -26,6 +26,7 @@ JAR_B="$(mktemp)"
 BODY="$(mktemp)"
 PASSED=0
 FAILED=0
+SKIPPED=0
 
 json() { node -e '
   let raw = "";
@@ -232,14 +233,24 @@ req GET "/api/trips/$TRIP_ID" 404 "deleted trip → 404" "" "$JAR_A"
 
 echo
 echo "-- Password reset request --"
-req POST /api/auth/forgot-password 200 "forgot-password is generic" "{\"email\":\"$USER_A\"}"
 req POST /api/auth/forgot-password 400 "forgot-password validates email" '{"email":"nope"}'
-FORGOT_IP_CODE=""
-for i in 1 2 3; do
-  FORGOT_IP_CODE=$(curl -sS -o "$BODY" -w "%{http_code}" -X POST "$BASE/api/auth/forgot-password" \
-    -H "Content-Type: application/json" -d '{"email":"flood@wonderlust.test"}')
-done
+req POST /api/auth/forgot-password 200 "forgot-password is generic for a known address" \
+  "{\"email\":\"$USER_A\"}"
+RESET_URL=$(body_field devResetUrl)
+if [ -n "$RESET_URL" ]; then
+  check "a reset link was generated (development mode)" "true" "true"
+else
+  echo "SKIP  reset link is only exposed by a development server (got a production-style response)"
+  SKIPPED=$((SKIPPED + 1))
+fi
+req POST /api/auth/forgot-password 200 "unknown address returns the same response" \
+  '{"email":"nobody-here@wonderlust.test"}'
+check "unknown address gets no reset link" "" "$(body_field devResetUrl)"
+FORGOT_IP_CODE=$(curl -sS -o "$BODY" -w "%{http_code}" -X POST "$BASE/api/auth/forgot-password" \
+  -H "Content-Type: application/json" -d '{"email":"flood@wonderlust.test"}')
 check "forgot-password rate limited" "429" "$FORGOT_IP_CODE"
+
+RESET_TOKEN=$(node -e 'try { process.stdout.write(new URL(process.argv[1]).searchParams.get("token") || ""); } catch { process.stdout.write(""); }' "$RESET_URL")
 
 echo
 echo "-- Registration rate limiting --"
@@ -259,10 +270,33 @@ curl -sS -o /dev/null -b "$JAR_A" -c "$JAR_A" -X POST "$BASE/api/auth/signout" \
   --data-urlencode "csrfToken=$LOGOUT_CSRF" >/dev/null
 req GET /api/users 401 "session cleared after sign out" "" "$JAR_A"
 
+echo
+echo "-- Password reset completion --"
+NEW_PASSWORD="Wonderlust456!"
+req POST /api/auth/reset-password 400 "unknown reset token → 400" \
+  '{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","password":"Wonderlust456!","confirmPassword":"Wonderlust456!"}'
+
+if [ -z "${RESET_URL:-}" ]; then
+  echo "SKIP  reset completion (no token available on a production-mode server)"
+  SKIPPED=$((SKIPPED + 1))
+else
+req POST /api/auth/reset-password 400 "weak new password → 400" \
+  "{\"token\":\"$RESET_TOKEN\",\"password\":\"short\",\"confirmPassword\":\"short\"}"
+req POST /api/auth/reset-password 400 "mismatched new passwords → 400" \
+  "{\"token\":\"$RESET_TOKEN\",\"password\":\"$NEW_PASSWORD\",\"confirmPassword\":\"Different456!\"}"
+req POST /api/auth/reset-password 200 "reset password with a valid token" \
+  "{\"token\":\"$RESET_TOKEN\",\"password\":\"$NEW_PASSWORD\",\"confirmPassword\":\"$NEW_PASSWORD\"}"
+req POST /api/auth/reset-password 400 "token is single-use → 400 on replay" \
+  "{\"token\":\"$RESET_TOKEN\",\"password\":\"$NEW_PASSWORD\",\"confirmPassword\":\"$NEW_PASSWORD\"}"
+check "login with the old password now fails" "fail" "$(login "$JAR_A" "$USER_A" "$PASSWORD")"
+check "login with the new password works" "ok" "$(login "$JAR_A" "$USER_A" "$NEW_PASSWORD")"
+req GET /api/users 200 "new password session can read the profile" "" "$JAR_A"
+fi
+
 rm -f "$JAR_A" "$JAR_B" "$BODY"
 
 echo
 echo "======================================"
-echo "Passed: $PASSED   Failed: $FAILED"
+echo "Passed: $PASSED   Failed: $FAILED   Skipped: $SKIPPED"
 echo "======================================"
 [ "$FAILED" -eq 0 ]

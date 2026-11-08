@@ -15,7 +15,17 @@ import { HttpError } from "@/lib/api";
 
 type Window = { count: number; resetAt: number };
 
-const windows = new Map<string, Window>();
+/**
+ * Counters are stored on globalThis so every route bundle (and each dev
+ * recompile) shares one map instead of getting a private copy.
+ */
+const globalForRateLimit = globalThis as unknown as {
+  __wonderlustRateLimits?: Map<string, Window>;
+};
+
+const windows =
+  globalForRateLimit.__wonderlustRateLimits ??
+  (globalForRateLimit.__wonderlustRateLimits = new Map<string, Window>());
 
 /** Periodically drop expired windows so the map cannot grow unbounded. */
 const MAX_ENTRIES = 10_000;

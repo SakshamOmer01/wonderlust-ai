@@ -43,6 +43,17 @@ export const registerSchema = z
 
 export const forgotPasswordSchema = z.object({ email: emailSchema });
 
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(20, "Invalid reset token").max(200),
+    password: passwordSchema,
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 export const updateProfileSchema = z
   .object({
     name: z.string().trim().min(1, "Name cannot be empty").max(80).optional(),

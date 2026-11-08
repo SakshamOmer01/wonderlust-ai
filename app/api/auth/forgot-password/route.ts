@@ -5,14 +5,19 @@
  *
  * Body: { email }
  *
- * Always responds with the same generic message so the endpoint cannot be used
- * to enumerate registered accounts. Requests are rate limited per IP.
+ * Creates a single-use, 30-minute reset token and emails a link to
+ * /reset-password?token=… .
  *
- * IMPORTANT: transactional email delivery is not configured in Phase 2 — no
- * provider credentials are present in this environment. Once an email service
- * (e.g. Resend/Postmark) is configured, generate a single-use, time-limited
- * reset token here and email a link to /reset-password?token=… . Until then no
- * reset link is actually sent.
+ * Security:
+ *   - The response is always the same generic message, so the endpoint cannot
+ *     be used to enumerate registered accounts.
+ *   - Rate limited per client IP and per target address (prevents using the
+ *     endpoint to flood someone's inbox).
+ *   - Only a SHA-256 hash of the token is stored; requesting a new link
+ *     invalidates the previous one.
+ *   - In development, when SMTP is not configured, the link is logged and
+ *     returned as `devResetUrl` so the flow can be exercised locally. This
+ *     never happens in production or when email delivery is configured.
  */
 
 import { NextResponse } from "next/server";
@@ -21,22 +26,57 @@ import { prisma } from "@/lib/db";
 import { parseJson, route } from "@/lib/api";
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit";
 import { forgotPasswordSchema } from "@/lib/validation";
+import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
+import {
+  buildResetUrl,
+  createPasswordResetToken,
+  RESET_TOKEN_TTL_MINUTES,
+} from "@/lib/password-reset";
+
+const GENERIC_MESSAGE =
+  "If an account with this email exists, a reset link has been sent";
 
 export const POST = route(async (request: Request) => {
   enforceRateLimit(`forgot-password:${clientKey(request)}`, 3, 15 * 60 * 1000);
 
   const { email } = await parseJson(request, forgotPasswordSchema);
 
-  // Look the account up so a reset token can be generated once email exists.
-  // The result is intentionally not reflected in the response.
-  await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  // Second limit keyed on the address so one IP can't blast a single inbox.
+  enforceRateLimit(`forgot-password:email:${email}`, 3, 60 * 60 * 1000);
 
-  if (process.env.NODE_ENV !== "production") {
-    console.info(`[forgot-password] reset requested for ${email}`);
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (!user) {
+    return NextResponse.json({ message: GENERIC_MESSAGE });
   }
 
+  const { token } = await createPasswordResetToken(user.id);
+  const resetUrl = buildResetUrl(token);
+
+  let delivered = false;
+  try {
+    const result = await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl,
+      expiresInMinutes: RESET_TOKEN_TTL_MINUTES,
+    });
+    delivered = result.delivered;
+  } catch (error) {
+    // Delivery failures must not leak account existence or token details.
+    console.error("[forgot-password] failed to send reset email:", error);
+  }
+
+  const devResetUrl =
+    !delivered && !isEmailConfigured() && process.env.NODE_ENV !== "production"
+      ? resetUrl
+      : undefined;
+
   return NextResponse.json({
-    message:
-      "If an account with this email exists, a reset link has been sent",
+    message: GENERIC_MESSAGE,
+    ...(devResetUrl ? { devResetUrl } : {}),
   });
 });

@@ -33,6 +33,7 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [resetSent, setResetSent] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -108,7 +109,8 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
         if (!response.ok) {
           setErrors({ submit: data.error || "Failed to send reset link" });
         } else {
-          router.push(`/login?reset=success`);
+          // Do not reveal whether the address exists; confirm generically.
+          setResetSent(true);
         }
       }
     } catch {
@@ -170,6 +172,16 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
           )}
 
           <CardContent className="space-y-4">
+            {mode === "login" && searchParams.get("reset") === "success" && (
+              <Alert variant="success">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Password updated</AlertTitle>
+                <AlertDescription>
+                  Sign in with your new password.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <label htmlFor="auth-email" className="text-sm font-medium text-slate-700">
@@ -255,9 +267,13 @@ export function AuthPage({ mode, onSwitchMode }: AuthPageProps) {
             {mode === "forgot" && (
               <Alert variant="info" className="mb-4">
                 <Mail className="h-4 w-4" />
-                <AlertTitle>Check your inbox</AlertTitle>
+                <AlertTitle>
+                  {resetSent ? "Check your inbox" : "Reset your password"}
+                </AlertTitle>
                 <AlertDescription>
-                  We&apos;ll send a password reset link to your email within a few minutes.
+                  {resetSent
+                    ? "If that email is registered, a reset link is on its way. It expires in 30 minutes and can be used once."
+                    : "Enter your email and we'll send a link to choose a new password."}
                 </AlertDescription>
               </Alert>
             )}
