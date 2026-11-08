@@ -83,6 +83,7 @@ All routes validate input with zod and return `{ error, code }` on failure.
 | GET | `/api/trips/:id` | optional | private trips: owner/admin only |
 | PUT/DELETE | `/api/trips/:id` | session | owner or admin |
 | GET/PUT | `/api/users` | session | the caller's own profile |
+| PUT | `/api/users/password` | session | current password required; keeps this session, revokes the rest |
 | GET | `/api/saved/destinations` | session | caller's saved list |
 | POST | `/api/saved/destinations` | session | 409 if already saved |
 | DELETE | `/api/saved/destinations/:id` | session | owner only |
@@ -120,6 +121,14 @@ increments the version in one write, so resetting a password immediately signs
 that account out everywhere — including other browsers and devices — while
 other accounts keep their sessions. `revokeUserSessions(userId)` does the same
 without changing the password (useful for a future "sign out all devices").
+
+Changing a password while signed in (`PUT /api/users/password`) requires the
+current password, then re-issues the caller's own cookie with the new version
+so the browser that made the request stays signed in while every other session
+for that account is rejected. That refresh is signed with an HMAC: the browser
+can post to `/api/auth/session` to update its token, so a bare version number
+would let a revoked token revive itself by guessing the current value.
+`lib/session-version.ts` holds the signing helpers.
 
 ## Security model
 

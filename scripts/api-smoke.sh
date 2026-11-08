@@ -23,6 +23,9 @@ PASSWORD="Wonderlust123!"
 
 JAR_A="$(mktemp)"
 JAR_B="$(mktemp)"
+JAR_ANON="$(mktemp)"
+JAR_A2="$(mktemp)"
+JAR_CHK="$(mktemp)"
 BODY="$(mktemp)"
 PASSED=0
 FAILED=0
@@ -273,6 +276,8 @@ req GET /api/users 401 "session cleared after sign out" "" "$JAR_A"
 echo
 echo "-- Password reset completion --"
 NEW_PASSWORD="Wonderlust456!"
+# The reset below rotates A's password on a development server only.
+A_CURRENT_PASSWORD="$PASSWORD"
 # Sign in again so the password change below has a live session to revoke.
 check "re-establish a session before the reset" "ok" "$(login "$JAR_A" "$USER_A" "$PASSWORD")"
 req GET /api/users 200 "session before the reset is valid" "" "$JAR_A"
@@ -296,9 +301,48 @@ req GET /api/users 200 "other users are unaffected by the reset" "" "$JAR_B"
 check "login with the old password now fails" "fail" "$(login "$JAR_A" "$USER_A" "$PASSWORD")"
 check "login with the new password works" "ok" "$(login "$JAR_A" "$USER_A" "$NEW_PASSWORD")"
 req GET /api/users 200 "new password session can read the profile" "" "$JAR_A"
+A_CURRENT_PASSWORD="$NEW_PASSWORD"
 fi
 
-rm -f "$JAR_A" "$JAR_B" "$BODY"
+echo
+echo "-- Change password --"
+CHANGED_PASSWORD="Wonderlust789!"
+req PUT /api/users/password 401 "change password requires a session" \
+  "{\"currentPassword\":\"$A_CURRENT_PASSWORD\",\"newPassword\":\"$CHANGED_PASSWORD\",\"confirmPassword\":\"$CHANGED_PASSWORD\"}" "$JAR_ANON"
+check "sign in before changing the password" "ok" "$(login "$JAR_A" "$USER_A" "$A_CURRENT_PASSWORD")"
+req GET /api/users 200 "session is valid before the change" "" "$JAR_A"
+check "sign in a second session for the same user" "ok" "$(login "$JAR_A2" "$USER_A" "$A_CURRENT_PASSWORD")"
+req GET /api/users 200 "second session is valid before the change" "" "$JAR_A2"
+req PUT /api/users/password 400 "change password with a wrong current password" \
+  "{\"currentPassword\":\"NotMyPassword1!\",\"newPassword\":\"$CHANGED_PASSWORD\",\"confirmPassword\":\"$CHANGED_PASSWORD\"}"
+req PUT /api/users/password 400 "change password to a weak value" \
+  "{\"currentPassword\":\"$A_CURRENT_PASSWORD\",\"newPassword\":\"short\",\"confirmPassword\":\"short\"}"
+req PUT /api/users/password 400 "change password with mismatched confirmation" \
+  "{\"currentPassword\":\"$A_CURRENT_PASSWORD\",\"newPassword\":\"$CHANGED_PASSWORD\",\"confirmPassword\":\"Different789!\"}"
+req PUT /api/users/password 200 "change password" \
+  "{\"currentPassword\":\"$A_CURRENT_PASSWORD\",\"newPassword\":\"$CHANGED_PASSWORD\",\"confirmPassword\":\"$CHANGED_PASSWORD\"}"
+req GET /api/users 200 "the calling session survives the change" "" "$JAR_A"
+req GET /api/users 401 "other sessions for the user are revoked" "" "$JAR_A2"
+
+# The browser may POST to /api/auth/session to update its token; a revoked
+# session must not be able to talk its way back in with a guessed version.
+CURRENT_SV=$(curl -sS -b "$JAR_A" "$BASE/api/auth/session" | json sessionVersion)
+FORGE_CSRF=$(curl -sS -b "$JAR_A2" -c "$JAR_A2" "$BASE/api/auth/csrf" | json csrfToken)
+curl -sS -o /dev/null -b "$JAR_A2" -c "$JAR_A2" -X POST "$BASE/api/auth/session" \
+  -H "Content-Type: application/json" \
+  -d "{\"csrfToken\":\"$FORGE_CSRF\",\"data\":{\"sessionVersion\":$CURRENT_SV}}" >/dev/null
+req GET /api/users 401 "revoked session cannot forge the current version" "" "$JAR_A2"
+check "login with the previous password fails" "fail" "$(login "$JAR_CHK" "$USER_A" "$A_CURRENT_PASSWORD")"
+check "login with the changed password works" "ok" "$(login "$JAR_CHK" "$USER_A" "$CHANGED_PASSWORD")"
+CHANGE_RATE_CODE=""
+for i in 1 2 3 4 5 6; do
+  CHANGE_RATE_CODE=$(curl -sS -o "$BODY" -w "%{http_code}" -X PUT "$BASE/api/users/password" \
+    -b "$JAR_A" -H "Content-Type: application/json" \
+    -d "{\"currentPassword\":\"Nope12345!\",\"newPassword\":\"$CHANGED_PASSWORD\",\"confirmPassword\":\"$CHANGED_PASSWORD\"}")
+done
+check "change password rate limited" "429" "$CHANGE_RATE_CODE"
+
+rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$JAR_A2" "$JAR_CHK" "$BODY"
 
 echo
 echo "======================================"

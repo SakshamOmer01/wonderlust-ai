@@ -15,8 +15,9 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 
 import { prisma } from "@/lib/db";
+import { verifySessionVersionProof } from "@/lib/session-version";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -66,7 +67,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = user.role ?? "user";
@@ -75,6 +76,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // bumping User.sessionVersion revokes existing sessions.
         token.sv = user.sessionVersion ?? 0;
       }
+
+      // `useSession().update()` lets the browser push arbitrary data here, so a
+      // version is only accepted when it carries the server's HMAC. That is how
+      // the change-password endpoint keeps the caller signed in after bumping
+      // the version, without letting a revoked token revive itself.
+      if (trigger === "update") {
+        const update = session as
+          | { sessionVersion?: unknown; sessionVersionProof?: unknown }
+          | undefined;
+
+        if (
+          verifySessionVersionProof(token.id, update?.sessionVersion, update?.sessionVersionProof)
+        ) {
+          token.sv = update?.sessionVersion as number;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

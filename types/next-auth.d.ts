@@ -16,6 +16,11 @@ declare module "next-auth" {
     } & DefaultSession["user"];
     /** Credential version this session was issued with. */
     sessionVersion: number;
+    /**
+     * Server-only handshake value for `unstable_update`: an HMAC over the new
+     * version. Never populated in a session returned to the browser.
+     */
+    sessionVersionProof?: string;
   }
 
   interface User {

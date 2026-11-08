@@ -18,20 +18,45 @@ const BCRYPT_COST = 12;
 /**
  * Hash and store a new password, revoking every existing session for the user
  * in the same database write.
+ *
+ * Returns the new credential version. Callers that need to keep the current
+ * session alive (the change-password endpoint) feed it back through
+ * `unstable_update` after signing it with `signSessionVersion`.
  */
 export async function setUserPassword(
   userId: string,
   plainPassword: string
-): Promise<void> {
+): Promise<number> {
   const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_COST);
 
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: {
       passwordHash,
       sessionVersion: { increment: 1 },
     },
+    select: { sessionVersion: true },
   });
+
+  return updated.sessionVersion;
+}
+
+/**
+ * Check a plaintext password against the stored hash.
+ * Returns false for unknown users and accounts without a local password.
+ */
+export async function verifyUserPassword(
+  userId: string,
+  plainPassword: string
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  });
+
+  if (!user?.passwordHash) return false;
+
+  return bcrypt.compare(plainPassword, user.passwordHash);
 }
 
 /**
