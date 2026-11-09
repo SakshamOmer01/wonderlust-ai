@@ -27,7 +27,6 @@ import { isAiConfigured } from "@/lib/ai";
 import { upsertTripItineraryDay, saveTripPlan } from "@/lib/trip-ai";
 import { slugify } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
-import type { TripPlanContents } from "@/lib/ai";
 
 const createTripWithAiSchema = createTripSchema.extend({
   budgetTotal: z.number().min(0).max(10_000_000).optional(),
@@ -132,12 +131,10 @@ export const POST = route(async (request: Request) => {
   if (!plan) {
     throw new Error("PLAN_GENERATION_FAILED");
   }
-  const planTyped: TripPlanContents = plan;
 
   await saveTripPlan(user.id, trip.id, plan);
 
   // Compute the smart budget from the trip's date range and persist it.
-  const nights = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000));
   const totalEst = Number(plan.budget.accommodation) + Number(plan.budget.food) + Number(plan.budget.transportation) + Number(plan.budget.activity) + Number(plan.budget.other);
   const budget = {
     accommodation: Number(plan.budget.accommodation),

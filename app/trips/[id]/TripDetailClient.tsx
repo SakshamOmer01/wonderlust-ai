@@ -11,17 +11,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/Card";
 import { Loader2, Trash2, RefreshCw, Save, MessageSquare } from "lucide-react";
 
 type PlanDay = { day: number; morning?: string[]; afternoon?: string[]; evening?: string[]; foods?: string[]; transport?: string[]; tips?: string[] };
+type PlanBudget = { accommodation?: number; food?: number; transportation?: number; activity?: number; other?: number; total?: number; remaining?: number } | null;
 
-function parsePlan(contents: any): { days: PlanDay[]; budget: any } {
+function parsePlan(contents: unknown): { days: PlanDay[]; budget: PlanBudget } {
   if (!contents) return { days: [], budget: null };
-  const obj = typeof contents === "string" ? (() => { try { return JSON.parse(contents); } catch { return null; } })() : contents;
-  const days = Array.isArray(obj?.itinerary) ? obj.itinerary : [];
-  return { days, budget: obj?.budget ?? null };
+  const obj: unknown = typeof contents === "string" ? (() => { try { return JSON.parse(contents) as unknown; } catch { return null; } })() : contents;
+  const rec = obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+  const days = Array.isArray(rec?.itinerary) ? (rec.itinerary as PlanDay[]) : [];
+  return { days, budget: (rec?.budget as PlanBudget) ?? null };
 }
 
-function BudgetView({ budget }: { budget: any }) {
+function BudgetView({ budget }: { budget: PlanBudget }) {
   if (!budget) return <p className="text-sm text-slate-500">No budget estimate yet.</p>;
-  const rows: [string, any][] = [["Accommodation", budget.accommodation],["Food", budget.food],["Transportation", budget.transportation],["Activities", budget.activity],["Other", budget.other],["Total estimated", budget.total],["Remaining budget", budget.remaining]];
+  const rows: [string, number | undefined][] = [["Accommodation", budget.accommodation],["Food", budget.food],["Transportation", budget.transportation],["Activities", budget.activity],["Other", budget.other],["Total estimated", budget.total],["Remaining budget", budget.remaining]];
   return (
     <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-7">
       {rows.map(([label, val]) => (

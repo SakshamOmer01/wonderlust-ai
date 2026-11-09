@@ -20,7 +20,7 @@ import { ProfileCard } from "@/components/users/ProfileCard";
 import { SavedDestinations } from "@/components/dashboard/SavedDestinations";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Alert, AlertTitle, AlertDescription } from "@/ui/Alert";
-import { AlertCircle, Star, MapPin, Compass, User, Heart, Plus } from "lucide-react";
+import { AlertCircle, Star, Compass, Plus } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Dashboard | Wonderlust",
