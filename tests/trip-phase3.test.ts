@@ -52,23 +52,42 @@ export { DB_AVAILABLE, getPrisma };
 
 // ─── Helper: create a test trip (only when DB is available) ───────────────────
 
-// Known IDs from the seed data.
-const DESTINATION_KYOTO = "cmw85f3en0001el03qxcoo5qa";
-let USER_ADMIN: string | null = null;
+// Resolve IDs from the configured test database (seed data may vary by environment).
+let _destId: string | null = null;
+let _ownerId: string | null = null;
 let TEST_USER_ID: string | null = null;
-const FOREIGN_USER_ID = "dummy-user";
+const FOREIGN_USER_ID = "foreign-user-not-owner";
 
-// Set the test user IDs synchronously before tests run.
-// In a real test environment, these would be set from the database.
-USER_ADMIN = "cmw85f3mm0004el03oiypa4yq";
-TEST_USER_ID = USER_ADMIN;
+async function resolveTestIds(): Promise<{ destinationId: string; ownerId: string } | null> {
+  if (!DB_AVAILABLE()) return null;
+  const prisma = await getPrisma();
+  if (!prisma) return null;
+  if (_destId && _ownerId) {
+    TEST_USER_ID = _ownerId;
+    return { destinationId: _destId, ownerId: _ownerId };
+  }
+  const dest = await prisma.destination.findFirst({ select: { id: true } });
+  const user =
+    (await prisma.user
+      .findFirst({ where: { email: "admin@wonderlust.local" }, select: { id: true } })
+      .catch(() => null)) ?? (await prisma.user.findFirst({ select: { id: true } }));
+  if (!dest?.id || !user?.id) return null;
+  _destId = dest.id;
+  _ownerId = user.id;
+  TEST_USER_ID = user.id;
+  return { destinationId: dest.id, ownerId: user.id };
+}
 
 async function createTestTrip(data: any): Promise<any> {
   if (!DB_AVAILABLE()) return null;
-  const prisma = await getPrisma();  if (!prisma) return null;
-  // Use the known Kyoto destination (cmw84tf2k00016p03e4t0xcni)
-  data.destinationId = DESTINATION_KYOTO;
-  data.slug = `test-trip-${Date.now().toString(36)}`;
+  const prisma = await getPrisma();
+  if (!prisma) return null;
+  const ids = await resolveTestIds();
+  if (!ids) return null;
+  data.destinationId = ids.destinationId;
+  data.userId = ids.ownerId;
+  const base = data.slug ? String(data.slug) : "test-trip";
+  data.slug = `${base}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   return prisma.trip.create({ data });
 }
 
@@ -298,7 +317,6 @@ describe("Phase 3 — Trip Management", () => {
       budget: "standard",
       image: "",
       price: 0,
-      userId: TEST_USER_ID,
     });
     if (!trip) return;
 
@@ -326,7 +344,8 @@ describe("Phase 3 — Trip Management", () => {
 
     // The owner can still access their own plan.
     const tripAi = await import("@/lib/trip-ai");
-    const saved = await tripAi.getTripAiPlan(TEST_USER_ID, trip.id);
+    const ownerId = (await resolveTestIds())!.ownerId;
+    const saved = await tripAi.getTripAiPlan(ownerId, trip.id);
     expect(saved).toBeNull(); // No plan was saved because the upsert failed.
 
     const forbidden = await tripAi.getTripAiPlan(FOREIGN_USER_ID, trip.id);
@@ -350,7 +369,6 @@ describe("Phase 3 — Trip Management", () => {
       budget: "standard",
       image: "",
       price: 0,
-      userId: TEST_USER_ID,
     });
     if (!trip) return;
 
@@ -380,7 +398,6 @@ describe("Phase 3 — Trip Management", () => {
       budget: "standard",
       image: "",
       price: 0,
-      userId: TEST_USER_ID,
     });
     if (!trip) return;
 
@@ -424,20 +441,19 @@ describe("Phase 3 — Trip Management", () => {
       budget: "standard",
       image: "",
       price: 0,
-      userId: TEST_USER_ID,
     });
     if (!trip) return;
 
     const mod = await import("@/lib/trip-ai");
     await mod.upsertTripItineraryDay(
-      TEST_USER_ID, trip.id, 1,
+      (await resolveTestIds())!.ownerId, trip.id, 1,
       ["Old activity"], ["Old afternoon"], ["Old evening"],
       ["Old food"], ["Old transport"], ["Old tip"]
     );
     // Save a trip plan so regenerateDay can find it.
     const tripAi = await import("@/lib/trip-ai");
     await tripAi.upsertTripAiPlan(
-      TEST_USER_ID, trip.id,
+      (await resolveTestIds())!.ownerId, trip.id,
       {
         title: "Regenerated day plan",
         destination: { name: "Kyoto", country: "japan", region: "Kansai" },
@@ -454,7 +470,7 @@ describe("Phase 3 — Trip Management", () => {
     const regenerate = await import("@/lib/trip-plan");
     let result;
     try {
-      result = await regenerate.regenerateItineraryDay(TEST_USER_ID, trip.id, 1);
+      result = await regenerate.regenerateItineraryDay((await resolveTestIds())!.ownerId, trip.id, 1);
     } catch (e) {
       console.error("Regenerate day error:", e instanceof Error ? e.message : String(e));
       throw e;
@@ -484,7 +500,6 @@ describe("Phase 3 — Security & Quality", () => {
       budget: "standard",
       image: "",
       price: 0,
-      userId: TEST_USER_ID,
     });
     if (!trip) return;
 
