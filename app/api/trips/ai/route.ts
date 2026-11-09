@@ -24,8 +24,8 @@ import { requireUser } from "@/lib/auth.server";
 import { createTripSchema } from "@/lib/validation";
 import { buildTripPlan } from "@/lib/trip-plan";
 import { isAiConfigured } from "@/lib/ai";
-import { upsertTripItineraryDay, upsertTripAiPlan, saveTripPlan } from "@/lib/trip-ai";
-import { formatCurrency, slugify } from "@/lib/utils";
+import { upsertTripItineraryDay, saveTripPlan } from "@/lib/trip-ai";
+import { slugify } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
 import type { TripPlanContents } from "@/lib/ai";
 
@@ -75,17 +75,17 @@ export const POST = route(async (request: Request) => {
   const user = await requireUser();
   const input: TripWithAiInput = await parseJson(request, createTripWithAiSchema);
 
-  const aiRaw: any = (input as any).ai ?? {};
-  const interests = (aiRaw.interests ?? (input as any).interests ?? "") as string;
-  const travelStyle = (aiRaw.travelStyle ?? (input as any).travelStyle ?? (input as any).budget ?? "standard") as string;
-  const budgetTotalRaw = aiRaw.budgetTotal ?? (input as any).budgetTotal;
+  const aiRaw = input.ai;
+  const interests = aiRaw?.interests ?? input.interests ?? "";
+  const travelStyle = aiRaw?.travelStyle ?? input.travelStyle ?? input.budget ?? "standard";
+  const budgetTotalRaw = aiRaw?.budgetTotal ?? input.budgetTotal;
   const budgetTotal = typeof budgetTotalRaw === "number" && Number.isFinite(budgetTotalRaw) ? budgetTotalRaw : undefined;
-  const aiInput: any = {
-    destination: aiRaw.destination ?? (input as any).destinationName,
-    start: aiRaw.start ?? (input as any).startDate,
-    end: aiRaw.end ?? (input as any).endDate,
-    travelers: aiRaw.travelers ?? (input as any).travelers,
-    budget: aiRaw.budget ?? (input as any).budget,
+  const aiInput = {
+    destination: aiRaw?.destination ?? input.title,
+    start: aiRaw?.start ?? input.startDate,
+    end: aiRaw?.end ?? input.endDate,
+    travelers: aiRaw?.travelers ?? input.travelers,
+    budget: aiRaw?.budget ?? input.budget,
     interests,
     travelStyle,
   };
@@ -108,7 +108,7 @@ export const POST = route(async (request: Request) => {
       startDate: aiInput.start,
       endDate: aiInput.end,
       travelers: aiInput.travelers ?? 2,
-      durationDays: aiInput.durationDays ?? 1,
+      durationDays: 1,
       budget: aiInput.budget ?? "standard",
       image: input.image ?? "",
       price: input.price ?? 0,
