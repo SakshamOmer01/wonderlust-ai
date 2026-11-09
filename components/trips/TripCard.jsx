@@ -52,7 +52,7 @@ export function TripCard({ trip }) {
           {formatCurrency(trip.price)}
         </div>
         <Button className="ml-auto" size="sm" asChild>
-          <Link href={`/trips/${trip.slug}`}>View trip</Link>
+          <Link href={`/trips/${trip.id}`}>View trip</Link>
         </Button>
       </div>
     </Card>);

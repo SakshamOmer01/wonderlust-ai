@@ -57,7 +57,7 @@ export const GET = route(async (_request: Request, context: RouteContext) => {
     throw new Error("TRIP_NOT_FOUND");
   }
 
-  let itinerary = trip.itinerary.map((i) => ({
+  let itinerary = trip.itinerary.map((i: typeof trip.itinerary[number]) => ({
     id: i.id,
     dayNumber: i.dayNumber,
     activity: i.activity,
@@ -128,7 +128,7 @@ export const POST = route(async (request: Request, context: RouteContext) => {
     }
     const dayRow = result.itineraryDay;
     return NextResponse.json({
-      trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t) => t?.title)) ?? "Trip" },
+      trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t: { title: string } | null) => t?.title)) ?? "Trip" },
       itineraryDay: dayRow,
       regeneratedDay: day,
       plan: result.plan,
@@ -140,7 +140,7 @@ export const POST = route(async (request: Request, context: RouteContext) => {
   if (regenerateWhole) {
     const result = await buildTripPlanFull({ id, userId: user.id });
     return NextResponse.json({
-      trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t) => t?.title)) ?? "Trip" },
+      trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t: { title: string } | null) => t?.title)) ?? "Trip" },
       itinerary: result.itinerary,
       ai: { configured: true },
     });
@@ -174,7 +174,7 @@ export const DELETE = route(async (request: Request, context: RouteContext) => {
   await prisma.tripItinerary.deleteMany({ where: { tripId: id, dayNumber: day } });
 
   return NextResponse.json({
-    trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t) => t?.title)) ?? "Trip" },
+    trip: { id, title: (await prisma.trip.findUnique({ where: { id } }).then((t: { title: string } | null) => t?.title)) ?? "Trip" },
     deletedDay: day,
   });
 });
@@ -211,14 +211,14 @@ async function buildTripPlanFull(input: { id: string; userId: string }) {
     end: end.toISOString(),
     travelers: trip.travelers,
     budget: trip.budget,
-    interests: trip.itinerary.map((i) => i.activity).join(", "),
+    interests: trip.itinerary.map((i: { activity: string }) => i.activity).join(", "),
     travelStyle: trip.budget,
   });
   if (!plan) {
     throw new Error("PLAN_GENERATION_FAILED");
   }
 
-  const itinerary = plan.itinerary.map((item: { day: number; morning: string[]; afternoon: string[]; evening: string[]; foods: string[]; transport: string[]; tips: string[] }, i: number) => ({
+  const itinerary = plan.itinerary.map((item: { day: number; morning: string[]; afternoon: string[]; evening: string[]; foods: string[]; transport: string[]; tips: string[] }) => ({
     tripId: input.id,
     dayNumber: item.day,
     activity: item.morning?.[0] ?? item.afternoon?.[0] ?? item.evening?.[0] ?? `Day ${item.day}`,
@@ -240,7 +240,7 @@ async function buildTripPlanFull(input: { id: string; userId: string }) {
       activity: plan.budget.activity,
       other: plan.budget.other,
       total: plan.budget.total,
-      remaining: Math.max(0, plan.budget.total - plan.budget.total),
+      remaining: Math.max(0, Number(plan.budget.remaining ?? 0)),
     },
     update: {
       accommodation: plan.budget.accommodation,
@@ -249,7 +249,7 @@ async function buildTripPlanFull(input: { id: string; userId: string }) {
       activity: plan.budget.activity,
       other: plan.budget.other,
       total: plan.budget.total,
-      remaining: Math.max(0, plan.budget.total - plan.budget.total),
+      remaining: Math.max(0, Number(plan.budget.remaining ?? 0)),
     },
   });
   await prisma.tripItinerary.deleteMany({ where: { tripId: input.id } });

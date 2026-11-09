@@ -30,15 +30,21 @@ import type { Prisma } from "@prisma/client";
 import type { TripPlanContents } from "@/lib/ai";
 
 const createTripWithAiSchema = createTripSchema.extend({
-  ai: {
+  budgetTotal: z.number().min(0).max(10_000_000).optional(),
+  interests: z.string().max(500).optional(),
+  travelStyle: z.enum(["budget", "standard", "luxury", "adventure", "family", "romantic"]).optional(),
+  travelPreferences: z.string().max(500).optional(),
+  ai: z.object({
     destination: z.string().trim().max(120).optional(),
     start: z.string(),
     end: z.string(),
     travelers: z.number().int().min(1).max(50).optional(),
-    budget: z.enum(["budget", "standard", "luxury"]).refine((_) => true, { message: "Invalid budget" }).optional(),
+    budget: z.enum(["budget", "standard", "luxury"]).optional(),
+    budgetTotal: z.number().min(0).max(10_000_000).optional(),
     interests: z.string().max(500).optional(),
     travelStyle: z.enum(["budget", "standard", "luxury", "adventure", "family", "romantic"]).optional(),
-  },
+    travelPreferences: z.string().max(500).optional(),
+  }).optional(),
 });
 
 type TripWithAiInput = z.infer<typeof createTripWithAiSchema>;
@@ -69,7 +75,20 @@ export const POST = route(async (request: Request) => {
   const user = await requireUser();
   const input: TripWithAiInput = await parseJson(request, createTripWithAiSchema);
 
-  const aiInput: any = input.ai;
+  const aiRaw: any = (input as any).ai ?? {};
+  const interests = (aiRaw.interests ?? (input as any).interests ?? "") as string;
+  const travelStyle = (aiRaw.travelStyle ?? (input as any).travelStyle ?? (input as any).budget ?? "standard") as string;
+  const budgetTotalRaw = aiRaw.budgetTotal ?? (input as any).budgetTotal;
+  const budgetTotal = typeof budgetTotalRaw === "number" && Number.isFinite(budgetTotalRaw) ? budgetTotalRaw : undefined;
+  const aiInput: any = {
+    destination: aiRaw.destination ?? (input as any).destinationName,
+    start: aiRaw.start ?? (input as any).startDate,
+    end: aiRaw.end ?? (input as any).endDate,
+    travelers: aiRaw.travelers ?? (input as any).travelers,
+    budget: aiRaw.budget ?? (input as any).budget,
+    interests,
+    travelStyle,
+  };
   const startDate = new Date(aiInput.start);
   const endDate = new Date(aiInput.end);
 
@@ -106,6 +125,7 @@ export const POST = route(async (request: Request) => {
     end: aiInput.end,
     travelers: aiInput.travelers,
     budget: aiInput.budget,
+    budgetTotal,
     interests: aiInput.interests,
     travelStyle: aiInput.travelStyle,
   }, trip.id, user.id);
@@ -118,14 +138,15 @@ export const POST = route(async (request: Request) => {
 
   // Compute the smart budget from the trip's date range and persist it.
   const nights = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86_400_000));
+  const totalEst = Number(plan.budget.accommodation) + Number(plan.budget.food) + Number(plan.budget.transportation) + Number(plan.budget.activity) + Number(plan.budget.other);
   const budget = {
-    accommodation: plan.budget.accommodation,
-    food: plan.budget.food,
-    transportation: plan.budget.transportation,
-    activity: plan.budget.activity,
-    other: plan.budget.other,
-    total: (plan.budget.accommodation + plan.budget.food + plan.budget.transportation + plan.budget.activity + plan.budget.other),
-    remaining: Math.max(0, plan.budget.remaining ?? 0),
+    accommodation: Number(plan.budget.accommodation),
+    food: Number(plan.budget.food),
+    transportation: Number(plan.budget.transportation),
+    activity: Number(plan.budget.activity),
+    other: Number(plan.budget.other),
+    total: Math.round((totalEst + Number.EPSILON) * 100) / 100,
+    remaining: budgetTotal !== undefined ? Math.max(0, Math.round((budgetTotal - totalEst + Number.EPSILON) * 100) / 100) : Math.max(0, Number(plan.budget.remaining ?? 0)),
   };
 
   // Persist budget.

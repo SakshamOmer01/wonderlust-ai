@@ -68,7 +68,7 @@ export async function generatePlan(input: {
   }
 
   const payload = {
-    model: input.model ?? (input.travelers ? "" : "gpt-4o-mini"),
+    model: (input.model && input.model.trim()) || config.model,
     messages: [
       {
         role: "system",
@@ -222,7 +222,7 @@ export type TripPlanContents = {
 export async function generateAssistantReply(
   userMessage: string,
   history: { role: "user" | "assistant"; content: string }[],
-  tripContext: { destination?: string; start: string; end: string; travelers: number; budget?: string; interests?: string; travelStyle?: string }
+  tripContext: { destination?: string; start?: string; end?: string; travelers?: number; budget?: string; interests?: string; travelStyle?: string; title?: string }
 ): Promise<{ reply: string; status: "ready" | "missing-key" | "error" }> {
   const config = loadProviderConfig();
 
@@ -230,12 +230,20 @@ export async function generateAssistantReply(
     return { reply: "", status: "missing-key" };
   }
 
-  const systemMessage = buildSystemPrompt(tripContext);
-  const userPrompt = buildUserPrompt({ destination: tripContext.destination, start: tripContext.start, end: tripContext.end, travelers: tripContext.travelers, budget: tripContext.budget, interests: tripContext.interests, travelStyle: tripContext.travelStyle });
+  const ctx: string[] = ["You are Wonderlust's travel assistant. Answer clearly and helpfully."];
+  if (tripContext?.title) ctx.push(`Trip: ${tripContext.title}`);
+  if (tripContext?.destination) ctx.push(`Destination: ${tripContext.destination}`);
+  if (tripContext?.start || tripContext?.end) ctx.push(`Dates: ${tripContext?.start ?? "?"} to ${tripContext?.end ?? "?"}`);
+  if (tripContext?.travelers) ctx.push(`Travelers: ${tripContext.travelers}`);
+  if (tripContext?.budget) ctx.push(`Budget: ${tripContext.budget}`);
+  if (tripContext?.interests) ctx.push(`Interests: ${tripContext.interests}`);
+  if (tripContext?.travelStyle) ctx.push(`Travel style: ${tripContext.travelStyle}`);
+  ctx.push("If you suggest itinerary or budget changes, be specific and practical. Do not invent unavailable bookings or prices as confirmed.");
+  const systemMessage = ctx.join("\n");
   const messages = [
     { role: "system" as const, content: systemMessage },
-    { role: "user" as const, content: userPrompt },
-    ...history,
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user" as const, content: userMessage },
   ];
 
   try {

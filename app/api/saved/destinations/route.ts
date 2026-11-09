@@ -45,8 +45,8 @@ export const GET = route(async (request: Request) => {
   ]);
 
   return NextResponse.json({
-    destinations: saved.map((entry) => ({
-      ...entry.destination,
+    destinations: saved.map((entry: { destination: unknown; createdAt: Date; id: string }) => ({
+      ...(entry.destination as Record<string, unknown>),
       savedAt: entry.createdAt,
       savedId: entry.id,
     })),

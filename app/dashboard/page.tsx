@@ -7,9 +7,12 @@
  */
 
 import { Metadata } from "next";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth.server";
 import type { User as AppUser } from "@/types";
+
+export const dynamic = "force-dynamic";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TripCard } from "@/components/trips/TripCard";
@@ -222,13 +225,12 @@ export default async function DashboardPage() {
                 title="Upcoming Trips"
                 description="Trips you&apos;re planning or have booked"
                 action={
-                  <a
-                    href="/trips"
+                  <Link href="/trips"
                     className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-wonderlust-primary hover:bg-primary/10 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
                     New Trip
-                  </a>
+                  </Link>
                 }
               />
               <div className="space-y-4">

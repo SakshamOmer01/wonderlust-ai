@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+type TripUpdateInput = NonNullable<Parameters<typeof prisma.trip.update>[0]>["data"];
 
 import { prisma } from "@/lib/db";
 import { HttpError, parseJson, requireUser, route } from "@/lib/api";
@@ -114,7 +114,7 @@ export const PUT = route(async (request: Request, context: RouteContext) => {
     );
   }
 
-  const data: Prisma.TripUpdateInput = {
+  const data: TripUpdateInput = {
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.startDate !== undefined ? { startDate } : {}),
     ...(input.endDate !== undefined ? { endDate } : {}),

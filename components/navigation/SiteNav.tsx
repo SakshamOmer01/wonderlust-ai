@@ -124,13 +124,12 @@ export function SiteNav({ user }: { user: NavUser | null }) {
                         <LayoutDashboard className="h-4 w-4" />
                         Dashboard
                       </a>
-                      <a
-                        href="/trips"
+                      <Link href="/trips"
                         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-100"
                       >
                         <Compass className="h-4 w-4" />
                         My trips
-                      </a>
+                      </Link>
                       <a
                         href="/dashboard#saved"
                         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-100"

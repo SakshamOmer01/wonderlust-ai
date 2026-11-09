@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+type TripWhereInput = NonNullable<Parameters<typeof prisma.trip.findMany>[0]>["where"];
 
 import { prisma } from "@/lib/db";
 import { HttpError, parseJson, parsePagination, requireUser, route } from "@/lib/api";
@@ -50,7 +50,7 @@ export const GET = route(async (request: Request) => {
   const requestedUserId = searchParams.get("user_id");
   const destinationId = searchParams.get("destination_id")?.trim();
 
-  let where: Prisma.TripWhereInput;
+  let where: TripWhereInput;
 
   if (mine || requestedUserId) {
     const user = await requireUser();

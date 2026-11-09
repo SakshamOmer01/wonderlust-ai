@@ -9,9 +9,12 @@ import { Testimonials } from "@/components/testimonials/Testimonials";
 import { Footer } from "@/components/layout/Footer";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 /** Ordered by review activity, mirroring "most loved" intent. */
 async function mostLovedDestinations() {
-  return prisma.destination.findMany({
+  try {
+    return await prisma.destination.findMany({
     orderBy: { reviewCount: "desc" },
     take: 8,
     include: {
@@ -22,6 +25,9 @@ async function mostLovedDestinations() {
       },
     },
   });
+  } catch {
+    return [];
+  }
 }
 
 export default async function HomePage() {

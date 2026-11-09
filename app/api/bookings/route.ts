@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+type BookingWhereInput = NonNullable<Parameters<typeof prisma.booking.findMany>[0]>["where"];
 
 import { prisma } from "@/lib/db";
 import { HttpError, parseJson, parsePagination, requireUser, route } from "@/lib/api";
@@ -45,7 +45,7 @@ export const GET = route(async (request: Request) => {
   const ownerFilter =
     scope === "all" && user.role === "admin" ? {} : { userId: user.id };
 
-  const where: Prisma.BookingWhereInput = {
+  const where: BookingWhereInput = {
     ...ownerFilter,
     ...(status ? { status } : {}),
   };

@@ -97,11 +97,13 @@ export function buildBudgetPlan(
   country: string,
   start: Date,
   end: Date,
-  travellers: number
+  travellers: number,
+  budgetCap?: number
 ): BudgetPlanRow {
   const nights = nightsFromDates(start, end);
   const breakdown = estimateBreakdown(style, country, nights, travellers);
-  const remaining = Math.max(0, breakdown.total);
+  const cap = typeof budgetCap === "number" && Number.isFinite(budgetCap) && budgetCap >= 0 ? budgetCap : null;
+  const remaining = cap !== null ? Math.max(0, round2(cap - breakdown.total)) : 0;
 
   return {
     accommodation: breakdown.accommodation,

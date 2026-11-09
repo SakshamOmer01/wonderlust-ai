@@ -121,6 +121,7 @@ export async function buildTripPlan(
     end?: string;
     travelers?: number;
     budget?: string;
+    budgetTotal?: number;
     interests?: string;
     travelStyle?: string;
   },
@@ -168,7 +169,7 @@ export async function buildTripPlan(
         .map((s) => s.trim())
         .filter(Boolean) ?? ["sightseeing"],
       itinerary: buildFallbackItinerary(country, start, end, travelers, budgetStyle),
-      budget: estimateBreakdown(styleToBudgetStyle(budgetStyle), country, nightsFromDates(start, end), travelers),
+      budget: (() => { const b = estimateBreakdown(styleToBudgetStyle(budgetStyle), country, nightsFromDates(start, end), travelers); const cap = typeof input.budgetTotal === "number" && Number.isFinite(input.budgetTotal) ? input.budgetTotal : null; return { ...b, remaining: cap !== null ? Math.max(0, Math.round((cap - b.total + Number.EPSILON) * 100) / 100) : 0 }; })(),
     };
   }
 
@@ -181,7 +182,8 @@ export async function buildTripPlan(
 
   // Persist the smart budget breakdown.
   const nights = nightsFromDates(start, end);
-  const budget = buildBudgetPlan(styleToBudgetStyle(budgetStyle), country, start, end, travelers);
+  const budgetCap = typeof input.budgetTotal === "number" && Number.isFinite(input.budgetTotal) ? input.budgetTotal : undefined;
+  const budget = buildBudgetPlan(styleToBudgetStyle(budgetStyle), country, start, end, travelers, budgetCap);
 
   if (tripId && userId) {
     await prisma.budgetPlan.upsert({
@@ -380,7 +382,7 @@ export async function generateAssistantMessage(
   userId: string,
   conversationId: string,
   userMessage: string,
-  tripContext: { title?: string; destination?: string; start?: string; end?: string }
+  tripContext: { title?: string; destination?: string; start?: string; end?: string; travelers?: number; budget?: string; interests?: string; travelStyle?: string }
 ) {
   // Load (or create) the conversation history for this caller + conversation.
   // The database may not be available (e.g. during testing), so wrap in try/catch.
@@ -402,7 +404,7 @@ export async function generateAssistantMessage(
   // Transform DB rows into the internal shape.
   const history = messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-  const replyRes = await (generateAssistantReply as (msg: string, hist: { role: "user" | "assistant"; content: string }[], ctx: typeof tripContext) => Promise<{ reply: string; status: "ready" | "missing-key" | "error" }>)(userMessage, history, tripContext);
+  const replyRes = await generateAssistantReply(userMessage, history, tripContext);
 
   // Persist the user turn first; the AI reply is stored after we have a
   // successful generation, so a malformed response never lands in the DB.

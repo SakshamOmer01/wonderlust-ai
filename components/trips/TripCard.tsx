@@ -71,7 +71,7 @@ export function TripCard({ trip }: TripCardProps) {
           size="sm"
           asChild
         >
-          <Link href={`/trips/${trip.slug}`}>View trip</Link>
+          <Link href={`/trips/${trip.id}`}>View trip</Link>
         </Button>
       </div>
     </Card>

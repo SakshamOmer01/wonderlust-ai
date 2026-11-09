@@ -1,8 +1,8 @@
 # Wonderlust — AI-Powered Travel & Adventure Platform
 
 Next.js 15 (App Router) + TypeScript travel platform. Phase 1 delivered the
-frontend; **Phase 2 adds the PostgreSQL database, authentication and a real
-backend API** consumed by the existing pages.
+frontend; Phase 2 added PostgreSQL (Prisma), authentication and the backend API;
+**Phase 3 adds the AI-powered travel planner** (server-side, OpenAI-compatible).
 
 ## Stack
 
@@ -13,6 +13,7 @@ backend API** consumed by the existing pages.
 | Database       | PostgreSQL via Prisma 7 (`@prisma/adapter-pg`)     |
 | Auth           | Auth.js / NextAuth v5 (Credentials + bcrypt + JWT) |
 | Validation     | zod                                                |
+| AI planner     | Server-side OpenAI-compatible chat completions (fetch) |
 | Styling        | Tailwind CSS v4                                    |
 
 Supabase is not used: the project talks to PostgreSQL directly through Prisma.
@@ -154,7 +155,30 @@ would let a revoked token revive itself by guessing the current value.
 - **Secrets** live only in `.env` (gitignored); no service-role keys or
   database credentials are exposed to the browser.
 
-## Known gaps (Phase 3+)
+
+
+## Phase 3 — AI travel planner (server-side)
+
+The planner, itinerary/budget generation and travel assistant call an **OpenAI-compatible**
+chat-completions endpoint **from the server only** (`lib/ai.ts`). The browser never
+receives API keys. If `AI_API_KEY` is not configured, the API returns a deterministic
+server-side fallback and reports `ai: { configured: false, source: "demo" }` (this is
+**not** a real AI response).
+
+Configure via environment variables (see `.env.example`):
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `AI_API_KEY` | Provider API key (required for real AI) | empty |
+| `AI_BASE_URL` | OpenAI-compatible base URL | `https://api.openai.com/v1` |
+| `AI_MODEL` | Model name | `gpt-4o-mini` |
+| `AI_TIMEOUT_MS` | Request timeout (ms) | `15000` |
+
+**Never commit real credentials.** Keep secrets in `.env` (gitignored) or CI/CD secrets.
+
+Key endpoints (authenticated): `POST /api/trips/ai` (generate & save plan), `GET/POST/DELETE /api/trips/:id/itinerary` (day plan, regenerate day), `POST /api/chat` (travel assistant).
+
+## Known gaps
 
 - SMTP credentials must be supplied to deliver reset emails; without them
   development logs the link and production logs a delivery failure.

@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+type ReviewWhereInput = NonNullable<Parameters<typeof prisma.review.findMany>[0]>["where"];
 
 import { prisma } from "@/lib/db";
 import { HttpError, parseJson, parsePagination, requireUser, route } from "@/lib/api";
@@ -28,7 +28,7 @@ export const GET = route(async (request: Request) => {
   const tripId = searchParams.get("trip_id")?.trim();
   const userId = searchParams.get("user_id")?.trim();
 
-  const where: Prisma.ReviewWhereInput = {
+  const where: ReviewWhereInput = {
     ...(destinationId ? { destinationId } : {}),
     ...(tripId ? { tripId } : {}),
     ...(userId ? { userId } : {}),

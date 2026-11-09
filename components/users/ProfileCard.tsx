@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/ui/Card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/ui/Avatar";
 import { Button } from "@/ui/Button";
@@ -103,7 +104,7 @@ export function ProfileCard({ user, stats }: ProfileCardProps) {
           <a href="/dashboard#saved">View saved destinations</a>
         </Button>
         <Button variant="outline" className="w-full" leftIcon={<Calendar className="h-4 w-4" />} asChild>
-          <a href="/trips">Trip history</a>
+          <Link href="/trips">Trip history</Link>
         </Button>
         <Button variant="outline" className="w-full" asChild>
           <a href="/profile">Edit profile</a>

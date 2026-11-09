@@ -94,8 +94,8 @@ describe("Phase 3 — AI Trip Generator", () => {
     expect(plan!.end).toBe("2027-07-08");
     expect(plan!.travelers).toBe(2);
     expect(plan!.style).toBe("standard");
-    expect(plan.interests).toContain("culture");
-    expect(plan.interests).toContain("food");
+    expect(plan!.interests).toContain("culture");
+    expect(plan!.interests).toContain("food");
   });
 
   it("should validate date ordering (end after start)", () => {
@@ -456,7 +456,7 @@ describe("Phase 3 — Trip Management", () => {
     try {
       result = await regenerate.regenerateItineraryDay(TEST_USER_ID, trip.id, 1);
     } catch (e) {
-      console.error("Regenerate day error:", e.message);
+      console.error("Regenerate day error:", e instanceof Error ? e.message : String(e));
       throw e;
     }
     expect(result.plan).not.toBeNull();

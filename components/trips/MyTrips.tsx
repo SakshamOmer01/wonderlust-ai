@@ -1,3 +1,5 @@
+"use client";
+import Link from "next/link";
 /**
  * My Trips component for Wonderlust.
  *
@@ -6,7 +8,6 @@
  * Requires authentication.
  */
 
-"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
@@ -55,12 +56,11 @@ export function MyTrips() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-900">My Trips</h2>
-        <a
-          href="/trips"
+        <Link href="/trips"
           className="text-sm font-semibold text-wonderlust-primary hover:underline"
         >
           View all
-        </a>
+        </Link>
       </div>
 
       {loading && <p className="text-sm text-slate-500">Loading trips...</p>}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TripPlannerForm } from "@/components/tripplanner/TripPlannerForm";
 
 export default function TripsPage() {

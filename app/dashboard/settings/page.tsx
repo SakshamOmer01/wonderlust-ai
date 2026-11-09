@@ -11,6 +11,8 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth.server";
 import type { User as AppUser } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ChangePasswordForm } from "@/components/dashboard/ChangePasswordForm";

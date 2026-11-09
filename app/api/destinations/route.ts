@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+type DestinationWhereInput = NonNullable<Parameters<typeof prisma.destination.findMany>[0]>["where"];
 
 import { prisma } from "@/lib/db";
 import { parsePagination, route } from "@/lib/api";
@@ -23,7 +23,7 @@ export const GET = route(async (request: Request) => {
   const continent = searchParams.get("continent")?.trim();
   const search = searchParams.get("search")?.trim();
 
-  const where: Prisma.DestinationWhereInput = {
+  const where: DestinationWhereInput = {
     ...(category ? { category } : {}),
     ...(continent ? { continent } : {}),
     ...(search

@@ -1,340 +1,204 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/ui/Button";
 import { Input } from "@/ui/Input";
 import { Select } from "@/ui/Select";
-import { Textarea } from "@/ui/Textarea";import { Alert, AlertTitle, AlertDescription } from "@/ui/Alert";
+import { Textarea } from "@/ui/Textarea";
+import { Alert, AlertTitle, AlertDescription } from "@/ui/Alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/Card";
-import { Calendar, Users, DollarSign, MapPin, Image, Save } from "lucide-react";
-import { DESTINATIONS } from "@/lib/data";
+import { Save, Sparkles, Loader2 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-import type { TripFormData } from "@/types";const destList = DESTINATIONS;
+type Destination = { id: string; name: string; country?: string; slug?: string };
 
-const BUDGET_OPTIONS = [
-  { value: "budget", label: "Budget ($1,000 - $2,000)", icon: <DollarSign className="h-4 w-4" /> },
-  { value: "standard", label: "Standard ($2,000 - $4,000)", icon: <DollarSign className="h-4 w-4" /> },
-  { value: "luxury", label: "Luxury ($4,000+)", icon: <DollarSign className="h-4 w-4" /> },
-] as const;
+type PlanDay = { day: number; morning?: string[]; afternoon?: string[]; evening?: string[]; foods?: string[]; transport?: string[]; tips?: string[] };
+
+type Plan = {
+  title?: string;
+  destination?: { name?: string; country?: string };
+  start?: string; end?: string; travelers?: number; style?: string; interests?: string[];
+  itinerary?: PlanDay[];
+  budget?: { accommodation?: number; food?: number; transportation?: number; activity?: number; other?: number; total?: number; remaining?: number };
+};
+
+const TRAVEL_STYLES = [
+  { value: "standard", label: "Standard" },
+  { value: "budget", label: "Budget" },
+  { value: "luxury", label: "Luxury" },
+  { value: "adventure", label: "Adventure" },
+  { value: "family", label: "Family" },
+  { value: "romantic", label: "Romantic" },
+];
 
 export function TripPlannerForm() {
-  const [form, setForm] = useState<TripFormData>({
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [form, setForm] = useState({
     title: "",
     destinationId: "",
-    destinationSlug: "",
+    destinationName: "",
     startDate: "",
     endDate: "",
-    travelers: 1,
-    budget: "standard",
-    durationDays: 7,
-    image: "",
+    travelers: 2,
+    budget: "standard" as "budget" | "standard" | "luxury",
+    budgetTotal: "",
+    travelStyle: "standard",
+    interests: "",
+    travelPreferences: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ trip?: any; ai?: any } | null>(null);
 
-  const [errors, setErrors] = useState<Partial<Record<keyof TripFormData, string>>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
+  useEffect(() => {
+    fetch("/api/destinations?limit=100")
+      .then((r) => r.json())
+      .then((d) => setDestinations(Array.isArray(d?.destinations) ? d.destinations : []))
+      .catch(() => setDestinations([]));
+  }, []);
 
-  const validate = (): boolean => {
-    const next: Partial<Record<keyof TripFormData, string>> = {};
+  const destOptions = useMemo(
+    () => [{ value: "", label: "Select a destination" }, ...destinations.map((d) => ({ value: d.id, label: `${d.name}${d.country ? `, ${d.country}` : ""}` }))],
+    [destinations]
+  );
 
-    if (!form.title.trim()) next.title = "Trip title is required";
-    else if (form.title.trim().length < 3)
-      next.title = "Trip title must be at least 3 characters";
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) { setForm((p) => ({ ...p, [k]: v })); }
 
-    if (!form.destinationId) next.destinationId = "Please select a destination";
-    if (!form.startDate)
-      next.startDate = "Travel start date is required";
-    else {
-      const start = new Date(form.startDate);
-      if (start.getTime() < Date.now() - 86_400_000)
-        next.startDate = "Start date cannot be in the past";
-    }
-    if (!form.endDate) next.endDate = "Travel end date is required";
-    else {
-      const end = new Date(form.endDate);
-      if (end < new Date(form.startDate))
-        next.endDate = "End date must be after start date";
-    }
-    if (form.travelers < 1) next.travelers = "At least 1 traveller";
-    else if (form.travelers > 20) next.travelers = "Max 20 travellers";
-
-    if (!form.budget) next.budget = "Please choose a budget";
-
-    if (!form.image.trim())
-      next.image = "Upload a trip cover image";
-
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
-  const handleChange = <K extends keyof TripFormData>(
-    key: K,
-    value: TripFormData[K]
-  ) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    if (errors[key]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
-
-    setIsSubmitting(true);
-    // NOTE: In the next phase this sends the payload to the backend API.
-    // For now this just simulates a submission and clears the form.
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSuccess(true);
-      setForm({
-        title: "",
-        destinationId: "",
-        destinationSlug: "",
-        startDate: "",
-        endDate: "",
-        travelers: 1,
-        budget: "standard",
-        durationDays: 7,
-        image: "",
+    setError(null); setResult(null);
+    if (!form.title.trim() || !form.destinationId || !form.startDate || !form.endDate) {
+      setError("Please fill in title, destination, start date and end date."); return;
+    }
+    if (new Date(form.endDate) <= new Date(form.startDate)) { setError("End date must be after start date."); return; }
+    const budgetTotal = form.budgetTotal.trim() ? Number(form.budgetTotal) : undefined;
+    if (budgetTotal !== undefined && (!Number.isFinite(budgetTotal) || budgetTotal < 0)) { setError("Total budget must be a valid non-negative number."); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/trips/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          destinationId: form.destinationId,
+          startDate: form.startDate,
+          endDate: form.endDate,
+          travelers: Number(form.travelers) || 1,
+          budget: form.budget,
+          image: "",
+          budgetTotal,
+          interests: form.interests.trim(),
+          travelStyle: form.travelStyle,
+          travelPreferences: form.travelPreferences.trim(),
+          ai: {
+            destination: form.destinationName || undefined,
+            start: form.startDate,
+            end: form.endDate,
+            travelers: Number(form.travelers) || 1,
+            budget: form.budget,
+            budgetTotal,
+            interests: form.interests.trim(),
+            travelStyle: form.travelStyle,
+            travelPreferences: form.travelPreferences.trim(),
+          },
+        }),
       });
-      setTimeout(() => setSuccess(false), 4000);
-    }, 1200);
-  };
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate trip.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const inputClass = (error?: string) =>
-    cn(
-      "w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-wonderlust-primary/30 focus:border-wonderlust-primary transition-all duration-200",
-      error && "border-red-400 focus:ring-red-400/30 focus:border-red-400"
-    );
+  const plan: Plan | null = result?.trip?.aiPlan ?? null;
+  const days: PlanDay[] = Array.isArray(plan?.itinerary) ? plan!.itinerary : [];
+  const budget = plan?.budget ?? (typeof result?.trip?.budget === "object" ? result.trip.budget : null);
 
   return (
-    <div className="bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center">
-            <p className="text-sm font-semibold text-wonderlust-primary uppercase tracking-widest">
-              Trip planner
-            </p>
-            <h1 className="mt-3 text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
-              Create a new trip
-            </h1>
-            <p className="mt-3 text-lg text-slate-500">
-              Fill in the details and we&apos;ll take care of the rest.
-            </p>
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
+      <div className="text-center">
+        <p className="text-sm font-semibold uppercase tracking-widest text-wonderlust-primary">AI Travel Planner</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Plan your trip with AI</h1>
+        <p className="mt-3 text-lg text-slate-500">Generate a day-by-day itinerary and budget estimate, then save and manage your trip.</p>
+      </div>
+
+      {error && <Alert variant="error"><AlertTitle>Could not generate trip</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+
+      <Card>
+        <CardHeader><CardTitle>Trip details</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input label="Trip title" value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Kyoto spring adventure" required />
+            <Select label="Destination" options={destOptions} value={form.destinationId} onChange={(e) => { const d = destinations.find((x) => x.id === e.target.value); set("destinationId", e.target.value); set("destinationName", d ? `${d.name}${d.country ? `, ${d.country}` : ""}` : ""); }} />
+            <Input label="Start date" type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} required />
+            <Input label="End date" type="date" value={form.endDate} onChange={(e) => set("endDate", e.target.value)} required />
+            <Input label="Number of travelers" type="number" min={1} max={50} value={form.travelers} onChange={(e) => set("travelers", Number(e.target.value))} />
+            <Input label="Total budget (cap, optional)" type="number" min={0} step="0.01" value={form.budgetTotal} onChange={(e) => set("budgetTotal", e.target.value)} placeholder="e.g. 3000" />
+            <Select label="Budget style" options={[{ value: "budget", label: "Budget" }, { value: "standard", label: "Standard" }, { value: "luxury", label: "Luxury" }]} value={form.budget} onChange={(e) => set("budget", e.target.value as any)} />
+            <Select label="Travel style" options={TRAVEL_STYLES} value={form.travelStyle} onChange={(e) => set("travelStyle", e.target.value)} />
+            <div className="md:col-span-2"><Textarea label="Interests & activities" value={form.interests} onChange={(e) => set("interests", e.target.value)} placeholder="e.g. culture, food, museums, hiking" rows={2} /></div>
+            <div className="md:col-span-2"><Textarea label="Travel preferences" value={form.travelPreferences} onChange={(e) => set("travelPreferences", e.target.value)} placeholder="e.g. relaxed pace, family-friendly, avoid long transfers" rows={2} /></div>
+            <div className="md:col-span-2 flex items-center gap-3">
+              <Button type="submit" disabled={loading} leftIcon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}>
+                {loading ? "Generating…" : "Generate Trip"}
+              </Button>
+              <span className="text-xs text-slate-500">Server-side AI; API keys are never exposed to the browser.</span>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {result?.trip && (
+        <div className="space-y-6">
+          {result.ai && !result.ai.configured && (
+            <Alert><AlertTitle>Demo / fallback plan</AlertTitle><AlertDescription>No real AI key is configured on the server (<code>AI_API_KEY</code>). A deterministic server-side plan was generated instead of a live AI response.</AlertDescription></Alert>
+          )}
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-900">{plan?.title || result.trip.title || "Your trip plan"}</h2>
+            {result.trip.id && <Link href={`/trips/${result.trip.id}`} className="text-sm font-semibold text-wonderlust-primary hover:underline">Open trip (edit, regenerate, assistant) →</Link>}
           </div>
 
-          {/* Success alert */}
-          {success && (
-            <Alert variant="success" className="mb-6">
-              <Save className="h-5 w-5" />
-              <AlertTitle>Saved!</AlertTitle>
-              <AlertDescription>
-                Your trip plan has been created successfully.
-              </AlertDescription>
-            </Alert>
+          {budget && (
+            <Card>
+              <CardHeader><CardTitle>Smart budget estimate</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-7">
+                  {[ ["Accommodation", budget.accommodation],["Food", budget.food],["Transportation", budget.transportation],["Activities", budget.activity],["Other", budget.other],["Total est.", budget.total],["Remaining", budget.remaining] ].map(([label, val]) => (
+                    <div key={String(label)} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="text-slate-500">{label}</div>
+                      <div className="font-semibold text-slate-900">${Number(val ?? 0).toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Remaining = total budget cap − estimated total (0 if no cap provided). Estimates are approximate.</p>
+              </CardContent>
+            </Card>
           )}
 
           <Card>
-            <CardHeader>
-              <CardTitle>Trip details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Title */}
-                <div>
-                  <label htmlFor="title" className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Trip title <span className="text-red-400">*</span>
-                  </label>
-                  <Input
-                    id="title"
-                    placeholder="e.g. Bali Highlands Retreat"
-                    value={form.title}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    error={errors.title}
-                    className={inputClass(errors.title)}
-                  />
-                </div>
-
-                {/* Origin (optional note) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="origin" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Origin
-                    </label>
-                    <Input
-                      id="origin"
-                      placeholder="e.g. New York"
-                      defaultValue="New York"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="departure" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Departure
-                    </label>
-                    <Input
-                      id="departure"
-                      type="date"
-                      className={inputClass()}
-                    />
+            <CardHeader><CardTitle>Day-by-day itinerary</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {days.length === 0 && <p className="text-sm text-slate-500">No structured days returned.</p>}
+              {days.map((d) => (
+                <div key={d.day} className="rounded-xl border border-slate-200 p-4">
+                  <div className="font-semibold text-slate-900">Day {d.day}</div>
+                  <div className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                    <div><span className="font-medium">Morning:</span> {(d.morning || []).join("; ") || "—"}</div>
+                    <div><span className="font-medium">Afternoon:</span> {(d.afternoon || []).join("; ") || "—"}</div>
+                    <div><span className="font-medium">Evening:</span> {(d.evening || []).join("; ") || "—"}</div>
+                    <div><span className="font-medium">Food:</span> {(d.foods || []).join("; ") || "—"}</div>
+                    <div><span className="font-medium">Transport/cost notes:</span> {(d.transport || []).join("; ") || "—"}</div>
+                    <div><span className="font-medium">Tips:</span> {(d.tips || []).join("; ") || "—"}</div>
                   </div>
                 </div>
-
-                {/* Destination */}
-                <div>
-                  <label htmlFor="destinationId" className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Destination <span className="text-red-400">*</span>
-                  </label>
-                  <Select
-                    id="destinationId"
-                    options={
-                      destList.map((d) => ({
-                        value: d.id,
-                        label: `${d.name} — ${d.country}`,
-                      })) || []
-                    }
-                    value={form.destinationId}
-                    onChange={(e) => {
-                      const sel = destList.find((d) => d.id === e.target.value);
-                      handleChange("destinationId", e.target.value);
-                      handleChange("destinationSlug", sel?.slug ?? "");
-                    }}
-                    error={errors.destinationId}
-                  />
-                </div>
-
-                {/* Travel dates */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="startDate" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Travel start date <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      className={inputClass(errors.startDate)}
-                      value={form.startDate}
-                      onChange={(e) => handleChange("startDate", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="endDate" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Travel end date <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      className={inputClass(errors.endDate)}
-                      value={form.endDate}
-                      onChange={(e) => handleChange("endDate", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Travelers */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="travelers" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Number of travellers <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      id="travelers"
-                      type="number"
-                      min={1}
-                      max={20}
-                      className={inputClass(errors.travelers)}
-                      value={form.travelers}
-                      onChange={(e) => handleChange("travelers", Number(e.target.value))}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="durationDays" className="mb-1.5 block text-sm font-medium text-slate-700">
-                      Duration (days)
-                    </label>
-                    <Input
-                      id="durationDays"
-                      type="number"
-                      min={1}
-                      value={form.durationDays}
-                      onChange={(e) =>
-                        handleChange("durationDays", Number(e.target.value))
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Budget */}
-                <div>
-                  <span className="mb-2 block text-sm font-medium text-slate-700">
-                    Budget <span className="text-red-400">*</span>
-                  </span>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    {BUDGET_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => handleChange("budget", opt.value)}
-                        className={cn(
-                          "flex-1 flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all duration-200",
-                          form.budget === opt.value
-                            ? "border-wonderlust-primary bg-wonderlust-primary text-white shadow-sm"
-                            : "border-border bg-white text-slate-600 hover:border-wonderlust-primary hover:text-wonderlust-primary"
-                        )}
-                      >
-                        {opt.icon}
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  {errors.budget && (
-                    <p className="mt-1 text-xs text-red-500">{errors.budget}</p>
-                  )}
-                </div>
-
-                {/* Cover image */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Cover image URL
-                    <span className="ml-2 text-xs text-slate-400">
-                      (optional, remote image)
-                    </span>
-                  </label>
-                  <Input
-                    placeholder="https://example.com/image.jpg"
-                    value={form.image}
-                    onChange={(e) => handleChange("image", e.target.value)}
-                    error={errors.image}
-                    className={inputClass(errors.image)}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    leftIcon={<Save />}
-                    isLoading={isSubmitting}
-                  >
-                    Save trip
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setForm({ title: "", destinationId: "", destinationSlug: "", startDate: "", endDate: "", travelers: 1, budget: "standard", durationDays: 7, image: "" })}
-                  >
-                    Reset
-                  </Button>
-                </div>
-              </form>
+              ))}
             </CardContent>
           </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 }
