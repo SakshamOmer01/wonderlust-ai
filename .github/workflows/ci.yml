@@ -73,6 +73,8 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+        env:
+          DATABASE_URL: postgres://testuser:testpass@localhost:5432/wonderlust_test
 
       - name: Run API smoke tests
         run: npm run start &
@@ -83,9 +85,11 @@ jobs:
       - name: Wait for server
         run: |
           for i in {1..30}; do
-            if curl -s http://localhost:3000/api/destinations > /dev/null; then
+            if curl -sf http://localhost:3000/api/destinations > /dev/null; then
               echo "Server is up"
-              break
+              exit 0
             fi
             sleep 2
           done
+          echo "Server did not become ready"
+          exit 1
