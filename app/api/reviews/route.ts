@@ -97,7 +97,7 @@ export const POST = route(async (request: Request) => {
     }
   }
 
-  const review = await prisma.$transaction(async (tx: any) => {
+  const review = await prisma.$transaction(async (tx) => {
     const created = await tx.review.create({
       data: {
         userId: user.id,

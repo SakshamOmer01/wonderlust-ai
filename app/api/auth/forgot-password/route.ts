@@ -30,7 +30,6 @@ import { isEmailConfigured, sendPasswordResetEmail } from "@/lib/email";
 import {
   buildResetUrl,
   createPasswordResetToken,
-  RESET_TOKEN_TTL_MINUTES,
 } from "@/lib/password-reset";
 
 const GENERIC_MESSAGE =

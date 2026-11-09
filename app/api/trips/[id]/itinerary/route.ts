@@ -17,7 +17,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { route } from "@/lib/api";
 import { requireUser } from "@/lib/auth.server";
-import { upsertTripItineraryDay, upsertTripAiPlan, regenerateDay } from "@/lib/trip-ai";
+import { upsertTripAiPlan, regenerateDay } from "@/lib/trip-ai";
 import { buildTripPlan } from "@/lib/trip-plan";
 
 type RouteContext = { params: Promise<{ id: string }> };

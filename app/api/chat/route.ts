@@ -27,7 +27,6 @@
 
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/db";
 import { route } from "@/lib/api";
 import { requireUser } from "@/lib/auth.server";
 import { generateAssistantMessage } from "@/lib/trip-plan";
@@ -36,7 +35,7 @@ export const POST = route(async (request: Request) => {
   const user = await requireUser();
   const body = await request.json().catch(() => ({}));
 
-  const { conversationId, message, tripId, tripContext } = body as {
+  const { conversationId, message, tripContext } = body as {
     conversationId: string;
     message: string;
     tripId?: string;

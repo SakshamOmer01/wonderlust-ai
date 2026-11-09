@@ -66,10 +66,11 @@ export const POST = route(async (request: Request) => {
     );
   } catch (error) {
     // Handle the race between the uniqueness check above and the insert.
-    if (
-      error instanceof Error &&
-      ((error as any).code === "P2002" || (error as any).code === "P2025")
-    ) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === "P2002" || code === "P2025") {
       return errorResponse(
         "An account with this email already exists",
         409,

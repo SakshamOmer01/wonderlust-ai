@@ -14,7 +14,6 @@ import { prisma } from "@/lib/db";
 import { route } from "@/lib/api";
 import { requireUser } from "@/lib/auth.server";
 import {
-  nightsFromDates,
   buildBudgetPlan,
 } from "@/lib/budget";
 
